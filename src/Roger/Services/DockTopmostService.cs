@@ -24,14 +24,14 @@ internal sealed class DockTopmostService : IDisposable
     private readonly Func<bool> _isInteractionInProgress;
     private readonly Func<IReadOnlyList<IntPtr>> _findTaskbars;
     private readonly WinEventDelegate _callback;
-    private readonly DispatcherTimer _debounce;
+    private DispatcherOperation? _restoreOperation;
     private readonly DispatcherTimer _watchdog;
     private readonly IntPtr _desktop = GetDesktopWindow();
     private IReadOnlyList<IntPtr> _taskbars = Array.Empty<IntPtr>();
     private IntPtr _systemHook, _reorderHook;
     private IntPtr _lastForeground;
     private bool _foregroundIsShellPopup;
-    private bool _enabled, _running, _disposed, _forcePending;
+    private bool _enabled, _running, _disposed;
 
     internal DockTopmostService(Window window, Func<bool> isInteractionInProgress,
         Func<IReadOnlyList<IntPtr>>? findTaskbars = null)
@@ -40,9 +40,6 @@ internal sealed class DockTopmostService : IDisposable
         _isInteractionInProgress = isInteractionInProgress;
         _findTaskbars = findTaskbars ?? FindTaskbars;
         _callback = OnWinEvent;
-        _debounce = new DispatcherTimer(DispatcherPriority.Background, window.Dispatcher)
-            { Interval = TimeSpan.FromMilliseconds(50) };
-        _debounce.Tick += OnDebounce;
         // Windows 11 does not emit a usable foreground event for every taskbar click.
         // This fallback only repairs an actual overlap with a taskbar above our window.
         _watchdog = new DispatcherTimer(DispatcherPriority.Background, window.Dispatcher)
@@ -61,7 +58,7 @@ internal sealed class DockTopmostService : IDisposable
 
     internal void RequestRestore()
     {
-        if (_running) ScheduleRestore(force: true);
+        if (_running) ScheduleRestore();
     }
 
     private void OnVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e) => UpdateRegistration();
@@ -78,7 +75,7 @@ internal sealed class DockTopmostService : IDisposable
             _reorderHook = SetWinEventHook(ReorderEvent, ReorderEvent, IntPtr.Zero, _callback, 0, 0, SkipOwnProcess);
             _watchdog.Start();
         }
-        ScheduleRestore(force: true);
+        ScheduleRestore();
     }
 
     private void OnWinEvent(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild,
@@ -86,9 +83,9 @@ internal sealed class DockTopmostService : IDisposable
     {
         if (!_running || _disposed) return;
         if (eventType is ForegroundEvent or MenuEndEvent or MenuPopupEndEvent)
-            ScheduleRestore(force: false);
+            ScheduleRestore();
         else if (eventType == ReorderEvent && idChild == 0 && (hwnd == _desktop || IsKnownTaskbar(hwnd)))
-            ScheduleRestore(force: false);
+            ScheduleRestore();
     }
 
     private bool IsKnownTaskbar(IntPtr hwnd)
@@ -97,28 +94,26 @@ internal sealed class DockTopmostService : IDisposable
         return false;
     }
 
-    private void ScheduleRestore(bool force)
+    private void ScheduleRestore()
     {
-        _forcePending |= force;
-        if (!_debounce.IsEnabled) _debounce.Start();
-    }
-
-    private void OnDebounce(object? sender, EventArgs e)
-    {
-        _debounce.Stop();
-        bool force = _forcePending;
-        _forcePending = false;
-        RestoreIfCovered(force);
+        if (_restoreOperation is { Status: DispatcherOperationStatus.Pending or DispatcherOperationStatus.Executing }) return;
+        // Repair confirmed taskbar overlap on the next dispatcher pass. An additional
+        // 50 ms timer left a visible covered frame after taskbar activation.
+        _restoreOperation = _window.Dispatcher.BeginInvoke(DispatcherPriority.Send, new Action(() =>
+        {
+            _restoreOperation = null;
+            RestoreIfCovered();
+        }));
     }
 
     private void OnWatchdog(object? sender, EventArgs e)
     {
         // Resolve handles again so Explorer restarts and secondary taskbars need no app restart.
         _taskbars = _findTaskbars();
-        RestoreIfCovered(force: false);
+        RestoreIfCovered();
     }
 
-    private void RestoreIfCovered(bool force)
+    private void RestoreIfCovered()
     {
         if (!_running || _disposed || !_window.IsVisible || _isInteractionInProgress() || IsShellMenuActive()) return;
         IntPtr dock = new WindowInteropHelper(_window).Handle;
@@ -127,7 +122,8 @@ internal sealed class DockTopmostService : IDisposable
         {
             if (taskbar == dock || !IsWindowVisible(taskbar) || !GetWindowRect(taskbar, out var barRect)
                 || !Overlaps(dockRect, barRect)) continue;
-            if (!force && !IsAbove(taskbar, dock)) continue;
+            bool topmost = (GetWindowLongPtr(dock, -20).ToInt64() & 0x8) != 0;
+            if (topmost && !IsAbove(taskbar, dock)) continue;
             // Do not use SWP_NOZORDER: it would discard HWND_TOPMOST, which caused the bug.
             // SWP_NOACTIVATE preserves the taskbar/app receiving the user's click and focus.
             SetWindowPos(dock, HwndTopmost, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 | 0x0200);
@@ -188,8 +184,8 @@ internal sealed class DockTopmostService : IDisposable
     private void Stop()
     {
         _running = false;
-        _forcePending = false;
-        _debounce.Stop(); _watchdog.Stop();
+        _restoreOperation?.Abort(); _restoreOperation = null;
+        _watchdog.Stop();
         if (_systemHook != IntPtr.Zero) { UnhookWinEvent(_systemHook); _systemHook = IntPtr.Zero; }
         if (_reorderHook != IntPtr.Zero) { UnhookWinEvent(_reorderHook); _reorderHook = IntPtr.Zero; }
     }
@@ -201,7 +197,7 @@ internal sealed class DockTopmostService : IDisposable
         _disposed = true;
         Stop();
         _window.IsVisibleChanged -= OnVisibilityChanged;
-        _debounce.Tick -= OnDebounce; _watchdog.Tick -= OnWatchdog;
+        _watchdog.Tick -= OnWatchdog;
     }
 
     private delegate void WinEventDelegate(IntPtr hook, uint eventType, IntPtr hwnd, int idObject,
@@ -221,6 +217,7 @@ internal sealed class DockTopmostService : IDisposable
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetGUIThreadInfo(uint thread, ref GuiThreadInfo info);
     [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string className, string? windowName);

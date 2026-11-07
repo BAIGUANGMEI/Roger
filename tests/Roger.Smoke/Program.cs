@@ -9,6 +9,8 @@ internal static class Program
         {
             await DiskNetworkSmoke.RunAsync();
             await SettingsUpdateSmoke.RunAsync();
+            await UpdateDownloadSmoke.RunAsync();
+            await UpdateInstallSmoke.RunAsync();
             await FileSystemCheckSmoke.RunAsync();
             await HardwareAccessSmoke.RunAsync();
             await OptimizationSmoke.RunAsync();

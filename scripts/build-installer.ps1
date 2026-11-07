@@ -5,7 +5,7 @@ param(
         [Version]::TryParse($_, [ref]$rogerParsedVersion) -and
             $rogerParsedVersion.Major -lt 65535 -and $rogerParsedVersion.Minor -lt 65535 -and $rogerParsedVersion.Build -lt 65535
     })]
-    [string]$Version = '0.3.0',
+    [string]$Version = '0.4.0',
     [string]$CompilerPath,
     [switch]$BootstrapCompiler
 )
@@ -92,7 +92,7 @@ if ($rogerCompilerSignature.Status -ne 'Valid' -or $rogerCompilerSignature.Signe
     throw 'Use an official Windows-signed Inno Setup compiler (Pyrsys B.V., Inno Setup 6.6.0 or newer).'
 }
 
-$rogerRequiredFiles = @('Roger.exe', 'Roger.dll', 'Roger.runtimeconfig.json', 'Roger.deps.json', 'hostfxr.dll', 'coreclr.dll', 'PresentationFramework.dll', 'LICENSE', 'README.md', 'THIRD-PARTY-NOTICES.md', 'DEPENDENCIES.txt')
+$rogerRequiredFiles = @('Roger.exe', 'Roger.dll', 'Roger.Updater.exe', 'Roger.runtimeconfig.json', 'Roger.deps.json', 'hostfxr.dll', 'coreclr.dll', 'PresentationFramework.dll', 'LICENSE', 'README.md', 'THIRD-PARTY-NOTICES.md', 'DEPENDENCIES.txt')
 foreach ($rogerRequiredFile in $rogerRequiredFiles) {
     if (-not (Test-Path -LiteralPath (Join-Path $rogerSource $rogerRequiredFile) -PathType Leaf)) { throw "Portable publish is incomplete: missing $rogerRequiredFile" }
 }

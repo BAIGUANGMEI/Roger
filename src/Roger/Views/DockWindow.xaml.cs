@@ -19,6 +19,10 @@ public partial class DockWindow : Window
     private HwndSource? _source;
     private bool _positionPending;
     private bool _dragging;
+    private bool _pointerGesture;
+    private NativePoint _pointerStart;
+    private NativeRect _gestureBounds;
+    private double _gestureDpiScale;
     private bool _closed;
     private bool _externalMenuOpen;
     private IntPtr _handle;
@@ -38,7 +42,7 @@ public partial class DockWindow : Window
         IsVisibleChanged += (_, _) => { if (IsVisible) SchedulePosition(); };
         SizeChanged += (_, _) => SchedulePosition();
         InitializeComponent();
-        _topmost = new DockTopmostService(this, () => _dragging || _externalMenuOpen || Shell.ContextMenu?.IsOpen == true);
+        _topmost = new DockTopmostService(this, () => _pointerGesture || _externalMenuOpen || Shell.ContextMenu?.IsOpen == true);
         BuildContextMenu();
         ApplySettings(settings);
     }
@@ -151,13 +155,20 @@ public partial class DockWindow : Window
             _source = source;
             _source?.AddHook(WindowHook);
         }
-        // WS_EX_TOOLWINDOW keeps this utility out of Alt+Tab while retaining a normal draggable HWND.
+        // ShowActivated only affects Show(). NOACTIVATE also keeps ordinary clicks from
+        // activating the overlay and causing a foreground/taskbar Z-order round trip.
         var style = GetWindowLongPtr(_handle, -20).ToInt64();
-        SetWindowLongPtr(_handle, -20, new IntPtr(style | 0x80));
+        long desired = style | 0x80 | 0x08000000; // TOOLWINDOW | NOACTIVATE.
+        if (style != desired) SetWindowLongPtr(_handle, -20, new IntPtr(desired));
     }
 
     private IntPtr WindowHook(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (message == 0x0021) // WM_MOUSEACTIVATE: deliver the click without activating.
+        {
+            handled = true;
+            return new IntPtr(3); // MA_NOACTIVATE; do not use MA_NOACTIVATEANDEAT.
+        }
         // Work area, display configuration, and per-monitor DPI changes all affect placement.
         if (message is 0x001A or 0x007E or 0x02E0)
             SchedulePosition();
@@ -166,12 +177,12 @@ public partial class DockWindow : Window
 
     private void SchedulePosition()
     {
-        if (_closed || _dragging || _positionPending) return;
+        if (_closed || _pointerGesture || _positionPending) return;
         _positionPending = true;
         Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
         {
             _positionPending = false;
-            if (!_closed && !_dragging && IsVisible)
+            if (!_closed && !_pointerGesture && IsVisible)
             {
                 EnsureNativeWindow();
                 PositionWindow();
@@ -233,7 +244,8 @@ public partial class DockWindow : Window
         left = Math.Clamp(left, bounds.Left, Math.Max(bounds.Left, bounds.Right - width));
         top = Math.Clamp(top, bounds.Top, Math.Max(bounds.Top, bounds.Bottom - height));
         // Native physical-pixel positioning avoids mixed-DPI virtual desktop coordinate drift.
-        SetWindowPos(_handle, IntPtr.Zero, left, top, 0, 0, 0x0001 | 0x0004 | 0x0010);
+        if (!GetWindowRect(_handle, out var current) || current.Left != left || current.Top != top)
+            SetWindowPos(_handle, IntPtr.Zero, left, top, 0, 0, 0x0001 | 0x0004 | 0x0010);
         _topmost.RequestRestore();
     }
 
@@ -244,18 +256,70 @@ public partial class DockWindow : Window
     {
         if (e.ClickCount == 2)
         {
+            EndPointerGesture(cancel: true);
             OpenRequested?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
             return;
         }
 
-        GetWindowRect(_handle, out var before);
+        if (GetCursorPos(out var cursor) && BeginPointerGesture(cursor.X, cursor.Y)
+            && !Mouse.Capture(this, CaptureMode.Element)) EndPointerGesture(cancel: true);
+        e.Handled = true;
+    }
+
+    private void OnMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_pointerGesture) return;
+        if (e.LeftButton != MouseButtonState.Pressed) { EndPointerGesture(); return; }
+        if (GetCursorPos(out var cursor)) UpdatePointerGesture(cursor.X, cursor.Y);
+        e.Handled = true;
+    }
+
+    private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_pointerGesture) return;
+        EndPointerGesture();
+        e.Handled = true;
+    }
+
+    private void OnLostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (_pointerGesture) EndPointerGesture(cancel: true);
+    }
+
+    internal bool BeginPointerGesture(int screenX, int screenY)
+    {
+        if (_closed || _handle == IntPtr.Zero || !GetWindowRect(_handle, out _gestureBounds)) return false;
+        _pointerStart = new NativePoint { X = screenX, Y = screenY };
+        _gestureDpiScale = Math.Max(1, GetDpiForWindow(_handle)) / 96d;
+        _pointerGesture = true;
+        _dragging = false;
+        return true;
+    }
+
+    internal void UpdatePointerGesture(int screenX, int screenY)
+    {
+        if (!_pointerGesture || _closed) return;
+        long dx = (long)screenX - _pointerStart.X, dy = (long)screenY - _pointerStart.Y;
+        if (!_dragging && Math.Abs(dx) < SystemParameters.MinimumHorizontalDragDistance * _gestureDpiScale
+            && Math.Abs(dy) < SystemParameters.MinimumVerticalDragDistance * _gestureDpiScale) return;
         _dragging = true;
-        try { DragMove(); }
-        catch (InvalidOperationException) { }
-        finally { _dragging = false; }
-        if (GetWindowRect(_handle, out var after)
-            && (Math.Abs(after.Left - before.Left) > 2 || Math.Abs(after.Top - before.Top) > 2))
+        int left = SafeCoordinate(_gestureBounds.Left + (double)dx), top = SafeCoordinate(_gestureBounds.Top + (double)dy);
+        if (GetWindowRect(_handle, out var current) && current.Left == left && current.Top == top) return;
+        SetWindowPos(_handle, IntPtr.Zero, left, top, 0, 0, 0x0001 | 0x0004 | 0x0010 | 0x0200);
+    }
+
+    internal void EndPointerGesture(bool cancel = false)
+    {
+        if (!_pointerGesture) return;
+        bool moved = _dragging;
+        _pointerGesture = false;
+        _dragging = false;
+        if (IsMouseCaptured) ReleaseMouseCapture();
+        if (cancel && moved && !_closed)
+            SetWindowPos(_handle, IntPtr.Zero, _gestureBounds.Left, _gestureBounds.Top, 0, 0, 0x0001 | 0x0004 | 0x0010 | 0x0200);
+        else if (moved && !_closed && GetWindowRect(_handle, out var after)
+            && (after.Left != _gestureBounds.Left || after.Top != _gestureBounds.Top))
         {
             _settings.DockPosition = DockPosition.Free;
             _settings.DockLeft = after.Left;
@@ -263,11 +327,17 @@ public partial class DockWindow : Window
             UpdateTopmostMode();
             SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
+        if (!_closed)
+        {
+            if (!moved || cancel) SchedulePosition();
+            _topmost.RequestRestore();
+        }
     }
 
     protected override void OnClosed(EventArgs e)
     {
         _closed = true;
+        EndPointerGesture(cancel: true);
         _topmost.Dispose();
         _source?.RemoveHook(WindowHook);
         base.OnClosed(e);
@@ -275,6 +345,8 @@ public partial class DockWindow : Window
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetCursorPos(out NativePoint point);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string className, string? windowName);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr childAfter, string className, string? windowName);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);

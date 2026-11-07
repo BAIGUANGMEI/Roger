@@ -63,6 +63,7 @@ public partial class MainWindow : Window
         InitializeDeviceViews();
         OptimizationTools.ItemsSource = OptimizationService.Tools;
         InitializeObservabilityViews();
+        InitializeUpdateViews();
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -345,43 +346,6 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { SettingsStatus.Text = "保存失败：" + ex.Message; }
     }
-    private void SaveRepository_Click(object sender, RoutedEventArgs e)
-    {
-        try { _settings.UpdateRepository = string.IsNullOrWhiteSpace(RepositoryInput.Text) ? "" : UpdateService.ValidateRepository(RepositoryInput.Text); _settingsService.Save(_settings); RepositoryInput.Text = _settings.UpdateRepository; _releaseUrl = null; OpenReleaseButton.IsEnabled = false; UpdateStatus.Text = "发布仓库已保存。"; }
-        catch (Exception ex) { UpdateStatus.Text = ex.Message; }
-    }
-    private async void CheckUpdate_Click(object sender, RoutedEventArgs e) => await CheckUpdatesAsync();
-    private Task CheckUpdatesAsync()
-    {
-        if (_shuttingDown) return Task.CompletedTask;
-        if (_updateTask is { IsCompleted: false }) return _updateTask;
-        _updateTask = RunUpdateCheckAsync();
-        return _updateTask;
-    }
-    private async Task RunUpdateCheckAsync()
-    {
-        string repository = RepositoryInput.Text.Trim();
-        _releaseUrl = null;
-        ReleaseNotes.Text = "";
-        CheckUpdateButton.IsEnabled = false; OpenReleaseButton.IsEnabled = false; UpdateStatus.Text = "正在查询 GitHub Releases…";
-        try
-        {
-            var result = await _updater.CheckAsync(repository, _lifetime.Token);
-            if (_shuttingDown) return;
-            if (!string.Equals(repository, RepositoryInput.Text.Trim(), StringComparison.OrdinalIgnoreCase))
-            {
-                UpdateStatus.Text = "仓库已更改，请重新检查更新。";
-                return;
-            }
-            _releaseUrl = result.ReleaseUrl; OpenReleaseButton.IsEnabled = true;
-            UpdateStatus.Text = result.IsNewer ? "发现新版本 " + result.Tag : "当前已是最新版本（远端 " + result.Tag + "）"; ReleaseNotes.Text = result.Notes;
-        }
-        catch (OperationCanceledException) { UpdateStatus.Text = "检查已取消或超时。"; }
-        catch (Exception ex) { UpdateStatus.Text = "无法检查更新（请确认仓库有正式 Release）：" + ex.Message; }
-        finally { CheckUpdateButton.IsEnabled = !_shuttingDown; }
-    }
-    private void OpenRelease_Click(object sender, RoutedEventArgs e) { if (_releaseUrl is not null) TryOpen(() => Process.Start(new ProcessStartInfo(_releaseUrl) { UseShellExecute = true })); }
-
     private void ApplyDock() { if (_dock is null) return; _dock.ApplySettings(_settings); if (_settings.ShowDock) _dock.Show(); else _dock.Hide(); }
     private void OnTrayMenuVisibilityChanged(object? sender, EventArgs e)
     {
@@ -400,7 +364,7 @@ public partial class MainWindow : Window
         if (!_exitRequested && _settings.MinimizeToTray) { Hide(); return; }
         if (_shuttingDown) return;
         _shuttingDown = true; _exitRequested = true; IsEnabled = false; FooterStatus.Text = "正在停止采集…"; _lifetime.Cancel();
-        try { await Task.WhenAll(new[] { _monitorTask, _scanTask, _speedTask, _updateTask, _checkTask, _driverTask, _toolboxStateTask, _dnsTask, _processTask, _historyReadTask, _historyExportTask }.Where(t => t is not null).Select(t => t!)); } catch (OperationCanceledException) { }
+        try { await Task.WhenAll(new[] { _monitorTask, _scanTask, _speedTask, _updateTask, _checkTask, _driverTask, _toolboxStateTask, _dnsTask, _processTask, _historyReadTask, _historyExportTask, _downloadUpdateTask }.Where(t => t is not null).Select(t => t!)); } catch (OperationCanceledException) { }
         finally { await Task.Run(_history.Dispose); ThemeService.Changed -= OnThemeChanged; SystemEvents.UserPreferenceChanged -= OnSystemPreferenceChanged; DisposeTray(); _dock?.Close(); _speedTest.Dispose(); _updater.Dispose(); _lifetime.Dispose(); _shutdownComplete = true; Application.Current.Shutdown(); }
     }
     private void DisposeTray()
@@ -448,6 +412,7 @@ public partial class MainWindow : Window
     }
     private void Elevate_Click(object sender, RoutedEventArgs e)
     {
+        if (UpdateFlowBusy) { FooterStatus.Text = "软件更新正在准备，请先等待完成或取消下载。"; return; }
         if (ElevationService.IsAdministrator) { RefreshHardwareAccess(); FooterStatus.Text = "当前已在管理员模式运行。"; return; }
         TryOpen(() =>
         {
@@ -458,6 +423,7 @@ public partial class MainWindow : Window
     }
     private async void InstallDriver_Click(object sender, RoutedEventArgs e)
     {
+        if (UpdateFlowBusy) { HardwareAccessText.Text = "软件更新正在准备，请先等待完成或取消下载，再安装温度驱动。"; return; }
         if (_driverTask is { IsCompleted: false }) return;
         _driverTask = RunDriverInstallAsync(); await _driverTask;
     }
@@ -470,6 +436,7 @@ public partial class MainWindow : Window
             string installer = await HardwareAccessService.DownloadVerifiedDriverAsync(_lifetime.Token);
             HardwareAccessText.Text = "正在安装官方驱动，请确认 Windows UAC 提示…";
             await HardwareAccessService.InstallDriverAsync(installer, _lifetime.Token);
+            if (_shuttingDown) return;
             RefreshHardwareAccess();
             HardwareAccessText.Text += " 安装完成，正在以管理员身份重新启动采样。";
             using var restarted = ElevationService.StartElevatedInstance();

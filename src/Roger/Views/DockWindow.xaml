@@ -5,7 +5,8 @@
         Background="Transparent" ResizeMode="NoResize" SizeToContent="WidthAndHeight"
         ShowInTaskbar="False" ShowActivated="False" Topmost="True"
         FontFamily="Segoe UI, Microsoft YaHei UI" UseLayoutRounding="True"
-        MouseLeftButtonDown="OnMouseLeftButtonDown">
+        MouseLeftButtonDown="OnMouseLeftButtonDown" MouseLeftButtonUp="OnMouseLeftButtonUp"
+        MouseMove="OnMouseMove" LostMouseCapture="OnLostMouseCapture">
     <Window.Resources>
         <Style x:Key="CaptionStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Muted}"/>

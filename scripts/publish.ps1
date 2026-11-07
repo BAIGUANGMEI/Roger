@@ -5,7 +5,7 @@ param(
         [Version]::TryParse($_, [ref]$rogerParsedVersion) -and
             $rogerParsedVersion.Major -lt 65535 -and $rogerParsedVersion.Minor -lt 65535 -and $rogerParsedVersion.Build -lt 65535
     })]
-    [string]$Version = '0.3.0'
+    [string]$Version = '0.4.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,6 +31,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Roger publish failed.' }
     $rogerPublishedVersion = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $rogerOutput 'Roger.dll')).Version.ToString(3)
     if ($rogerPublishedVersion -ne $Version) { throw "Published assembly version $rogerPublishedVersion does not match requested release $Version." }
+    # An updater running outside the application directory must carry its own runtime;
+    # it cannot keep DLLs in the application directory locked while Setup replaces them.
+    $rogerUpdaterOutput = Join-Path $rogerArtifacts 'Roger.Updater-win-x64'
+    & $rogerDotnet publish 'src/Roger.Updater/Roger.Updater.csproj' --configuration Release --runtime win-x64 --self-contained true "-p:Version=$Version" '-p:PublishSingleFile=true' '-p:IncludeNativeLibrariesForSelfExtract=true' '-p:PublishTrimmed=false' '-p:UseSharedCompilation=false' --output $rogerUpdaterOutput
+    if ($LASTEXITCODE -ne 0) { throw 'Roger updater publish failed.' }
+    $rogerUpdaterExe = Join-Path $rogerUpdaterOutput 'Roger.Updater.exe'
+    if (-not (Test-Path -LiteralPath $rogerUpdaterExe -PathType Leaf)) { throw 'Independent updater executable is missing.' }
+    Copy-Item -LiteralPath $rogerUpdaterExe -Destination $rogerOutput
     Copy-Item -LiteralPath (Join-Path $rogerRoot 'LICENSE'), (Join-Path $rogerRoot 'README.md'), (Join-Path $rogerRoot 'THIRD-PARTY-NOTICES.md') -Destination $rogerOutput
     Copy-Item -LiteralPath (Join-Path $rogerRoot 'third_party') -Destination (Join-Path $rogerOutput 'third_party') -Recurse
     Copy-Item -LiteralPath (Join-Path $rogerRoot 'docs') -Destination (Join-Path $rogerOutput 'docs') -Recurse

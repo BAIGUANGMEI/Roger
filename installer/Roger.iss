@@ -3,7 +3,7 @@
   #error Inno Setup 6.6.0 or newer is required (modern dynamic wizard support).
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.3.0"
+  #define AppVersion "0.4.0"
 #endif
 #ifndef AppSourceDir
   #define AppSourceDir SourcePath + "..\artifacts\Roger-win-x64"

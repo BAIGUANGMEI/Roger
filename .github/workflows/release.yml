@@ -21,7 +21,7 @@ jobs:
         env:
           ROGER_RELEASE_REF: ${{ github.ref }}
         run: |
-          $rogerVersion = '0.3.0'
+          $rogerVersion = '0.4.0'
           if ($env:ROGER_RELEASE_REF.StartsWith('refs/tags/', [StringComparison]::Ordinal)) {
             $rogerTag = $env:ROGER_RELEASE_REF.Substring('refs/tags/'.Length)
             if (-not $rogerTag.StartsWith('v', [StringComparison]::Ordinal)) { throw 'Release tags must start with v.' }
