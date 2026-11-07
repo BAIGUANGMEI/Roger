@@ -101,6 +101,7 @@ public sealed class SettingsService
 
     private static void Validate(AppSettings settings)
     {
+        if (!Enum.IsDefined(settings.Theme)) throw new ArgumentException("外观主题无效。");
         if (!Enum.IsDefined(settings.DockPosition))
             throw new ArgumentException("监控条位置无效。");
         if (settings.RefreshIntervalSeconds is < 1 or > 10)

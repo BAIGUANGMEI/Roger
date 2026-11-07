@@ -1,28 +1,54 @@
-"""Rasterize Roger's code-defined heartbeat mark into a multi-size Windows icon.
+"""Rasterize Roger's R monogram into a crisp multi-size Windows icon.
 
 Requires Pillow; the application and build do not require Python or Pillow.
-The matching editable vector source is src/Roger/Assets/Roger.svg.
+The matching vector sources are Assets/Roger.svg and Assets/Brand.xaml.
+All sources use the same 40x40 geometry and even-odd counter.
 """
 from pathlib import Path
-
 from PIL import Image, ImageDraw
 
+ROOT = Path(__file__).resolve().parent.parent
+OUTPUT = ROOT / "src" / "Roger" / "Assets" / "Roger.ico"
+SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)
+MINT, INK = "#65DEB1", "#10352A"
+RESOLUTION = 1024
+SCALE = RESOLUTION / 40
 
-root = Path(__file__).resolve().parent.parent
-output = root / "src" / "Roger" / "Assets" / "Roger.ico"
-scale = 4
-image = Image.new("RGBA", (256 * scale, 256 * scale), (0, 0, 0, 0))
+
+def cubic(start, control1, control2, end, steps=64):
+    """Sample the exact vector curve before supersampling and downscaling."""
+    result = []
+    for index in range(1, steps + 1):
+        t = index / steps
+        result.append(tuple((1 - t) ** 3 * start[axis]
+                            + 3 * (1 - t) ** 2 * t * control1[axis]
+                            + 3 * (1 - t) * t ** 2 * control2[axis]
+                            + t ** 3 * end[axis] for axis in (0, 1)))
+    return result
+
+
+def scaled(points):
+    return [(x * SCALE, y * SCALE) for x, y in points]
+
+
+image = Image.new("RGBA", (RESOLUTION, RESOLUTION), (0, 0, 0, 0))
 draw = ImageDraw.Draw(image)
-box = tuple(value * scale for value in (5, 5, 251, 251))
-draw.rounded_rectangle(box, radius=60 * scale, fill="#121c27", outline="#304239", width=5 * scale)
-points = [(38, 132), (75, 132), (96, 78), (124, 185), (154, 99), (173, 132), (218, 132)]
-scaled_points = [(x * scale, y * scale) for x, y in points]
-stroke_width = 15 * scale
-draw.line(scaled_points, fill="#82e5b8", width=stroke_width, joint="curve")
-radius = stroke_width / 2
-for x, y in scaled_points:
-    draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill="#82e5b8")
+draw.rounded_rectangle((0, 0, RESOLUTION - 1, RESOLUTION - 1), radius=10 * SCALE, fill=MINT)
+# F0 M11,10 H22 C31,10 32,23 24,25 L31,32 H23 L17,25 V32 H11 Z
+outer = [(11, 10), (22, 10)] + cubic((22, 10), (31, 10), (32, 23), (24, 25))
+outer += [(31, 32), (23, 32), (17, 25), (17, 32), (11, 32)]
+draw.polygon(scaled(outer), fill=INK)
+# Even-odd counter: M17,15 V20 H22 C26,20 26,15 22,15 Z
+counter = [(17, 15), (17, 20), (22, 20)] + cubic((22, 20), (26, 20), (26, 15), (22, 15))
+draw.polygon(scaled(counter), fill=MINT)
 image = image.resize((256, 256), Image.Resampling.LANCZOS)
-output.parent.mkdir(parents=True, exist_ok=True)
-image.save(output, format="ICO", sizes=[(size, size) for size in (16, 20, 24, 32, 40, 48, 64, 128, 256)])
-print(output)
+OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+image.save(OUTPUT, format="ICO", sizes=[(size, size) for size in SIZES])
+
+with Image.open(OUTPUT) as icon:
+    assert icon.ico.sizes() == {(size, size) for size in SIZES}
+    for size in SIZES:
+        frame = icon.ico.getimage((size, size)).convert("RGBA")
+        assert frame.getpixel((0, 0))[3] <= 3, "Rounded corner must stay transparent"
+        assert frame.getpixel((size // 2, size // 2))[3] == 255, "Mark must remain opaque"
+print(f"Generated and verified {len(SIZES)} Roger icon sizes: {OUTPUT}")

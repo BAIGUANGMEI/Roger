@@ -21,8 +21,10 @@ public sealed record MonitorSnapshot(
 }
 
 public enum DockPosition { TaskbarRight, TaskbarLeft, TopRight, BottomRight, Free }
+public enum AppTheme { Dark, Light, System }
 public sealed class AppSettings
 {
+    public AppTheme Theme { get; set; } = AppTheme.Dark;
     public bool ShowDock { get; set; } = true;
     public bool ShowCpu { get; set; } = true;
     public bool ShowGpu { get; set; } = true;

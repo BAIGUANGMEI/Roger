@@ -36,6 +36,7 @@ public sealed class HardwareMonitorService : IDisposable
     private IReadOnlyList<HardwareInfo>? _inventory;
     private IReadOnlyList<DriveReading> _drives = Array.Empty<DriveReading>();
     private long _lastDriveRead;
+    private HardwareAccessStatus? _hardwareAccess;
 
     public void Initialize()
     {
@@ -68,6 +69,7 @@ public sealed class HardwareMonitorService : IDisposable
                 Trace.TraceWarning("Hardware initialization: {0}", ex.Message);
             }
             RefreshPhysicalNetworkIds();
+            _hardwareAccess = HardwareAccessService.GetStatus();
         }
     }
 
@@ -122,7 +124,7 @@ public sealed class HardwareMonitorService : IDisposable
                 gpuMemoryTotal = null;
 
             if (cpuTemperature is null)
-                warnings.Add("CPU 温度不可用（硬件支持、驱动或权限受限）");
+                warnings.Add(HardwareAccessService.CpuTemperatureUnavailableMessage(_hardwareAccess ?? HardwareAccessService.GetStatus()));
             if (gpu is null)
                 warnings.Add("GPU 传感器不可用");
             else if (gpuTemperature is null)

@@ -9,6 +9,8 @@ internal static class Program
         {
             await DiskNetworkSmoke.RunAsync();
             await SettingsUpdateSmoke.RunAsync();
+            await FileSystemCheckSmoke.RunAsync();
+            await HardwareAccessSmoke.RunAsync();
             if (Array.IndexOf(args, "--hardware") >= 0) await HardwareSmoke.RunAsync();
             Console.WriteLine("All Roger smoke checks passed.");
             return 0;

@@ -70,7 +70,7 @@ public partial class DockWindow : Window
         NetworkUpload.Text = "↑ " + Rate(snapshot.UploadBytesPerSecond);
         CpuGroup.ToolTip = $"CPU {Percent(snapshot.CpuLoad)} · 温度 {Temperature(snapshot.CpuTemperature)}";
         GpuGroup.ToolTip = $"GPU {Percent(snapshot.GpuLoad)} · 温度 {Temperature(snapshot.GpuTemperature)}";
-        MemoryGroup.ToolTip = $"内存 {snapshot.MemoryUsedGb:0.0} / {snapshot.MemoryTotalGb:0.0} GB";
+        MemoryGroup.ToolTip = $"内存 {snapshot.MemoryUsedGb:0.0} / {snapshot.MemoryTotalGb:0.0} GiB";
         NetworkGroup.ToolTip = $"{snapshot.NetworkName}\n下载 {Rate(snapshot.DownloadBytesPerSecond)} · 上传 {Rate(snapshot.UploadBytesPerSecond)}";
     }
 
@@ -86,6 +86,9 @@ public partial class DockWindow : Window
     private void BuildContextMenu()
     {
         var menu = new ContextMenu();
+        menu.SetResourceReference(Control.BackgroundProperty, "SurfaceRaised");
+        menu.SetResourceReference(Control.ForegroundProperty, "TextPrimary");
+        menu.SetResourceReference(Control.BorderBrushProperty, "Line");
         var open = new MenuItem { Header = "打开 Roger" };
         open.Click += (_, _) => OpenRequested?.Invoke(this, EventArgs.Empty);
         menu.Items.Add(open);

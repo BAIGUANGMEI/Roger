@@ -1,4 +1,4 @@
-# 硬件数据来源与初版范围
+# 硬件数据来源与支持范围
 
 Roger 的监控数值来自本机 Windows API 和 LibreHardwareMonitor，不使用演示数据。初始化和采样应在后台串行执行；硬件清单首次通过 WMI 查询后缓存，不在每次刷新时重新查询。
 
@@ -17,7 +17,13 @@ Roger 的监控数值来自本机 Windows API 和 LibreHardwareMonitor，不使�
 
 ## 权限与可用性
 
-普通用户权限下即可运行。部分低层温度、主板、风扇传感器需要硬件驱动及管理员权限；Windows 安全策略也可能阻止驱动访问。应用不会自动提升权限、修改安全策略或提示关闭 Windows 防护。缺失的温度和 GPU 指标显示不可用，不用 0 代替；CPU、RAM、网络与可读磁盘仍可继续监控。
+普通用户权限下即可运行基本监控。LibreHardwareMonitor 0.9.6 的底层 CPU 温度、主板及风扇访问使用 **PawnIO 驱动**，并需要以管理员模式运行 Roger。仅提升权限但没有安装驱动，仍可能无法读取温度。
+
+硬件页提供明确的“启用 CPU 温度”安装入口和管理员模式切换。安装入口按用户操作下载 [PawnIO 官方签名版 2.2.0](https://github.com/namazso/PawnIO.Setup/releases/tag/2.2.0)，在启动前同时验证固定 SHA-256 和 Windows Authenticode 签名；随后由 Windows 请求管理员授权。没有用户操作时不会下载安装驱动。安装后重启 Roger 到管理员模式，重新初始化传感器。
+
+应用只使用官方签名版，不选择安装器的 unrestricted 选项，不修改 Windows 安全策略，也不要求关闭防护。部分设备或固件仍可能不提供可用传感器；缺失的数据明确显示“不可用”。CPU、RAM、网络与可读磁盘仍可继续监控。当前用户的自动登录启动保持普通模式，避免把正常启动强制变成管理员提示。
+
+驱动访问状态会区分未安装驱动、需要管理员模式、驱动尚未就绪及硬件没有有效读数。安装器启动之后会等待其完成，不在安装过程中强行中断；安装后仍需重启时会显示状态说明。
 
 监控软件只能报告硬件公开的状态。WMI 磁盘 `Status=OK` 不是完整 SMART 检测，也不保证磁盘没有故障。初版不包含坏道检测、压力测试、风扇控制或自动硬件修复。文件空间扫描和文件系统检查的使用方式见项目 README。
 
@@ -30,6 +36,8 @@ Roger 的监控数值来自本机 Windows API 和 LibreHardwareMonitor，不使�
 ## 参考
 
 - [LibreHardwareMonitor 官方项目及权限说明](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)
+- [LibreHardwareMonitor 0.9.6 官方安装驱动代码](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/blob/v0.9.6/LibreHardwareMonitor/UI/MainForm.cs)
+- [PawnIO 官方签名版与源码说明](https://pawnio.eu/)
 - [Windows GetSystemTimes](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getsystemtimes)
 - [Windows GlobalMemoryStatusEx](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-globalmemorystatusex)
 - [Windows Win32_VideoController](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-videocontroller)

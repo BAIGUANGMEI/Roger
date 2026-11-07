@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -24,13 +25,17 @@ public partial class MainWindow : Window
     private readonly DiskAnalyzer _analyzer = new();
     private readonly NetworkSpeedTestService _speedTest = new();
     private readonly UpdateService _updater = new();
+    private readonly FileSystemCheckService _fileSystemCheck = new();
+    private readonly ObservableCollection<SensorRow> _sensorRows = new();
     private readonly CancellationTokenSource _lifetime = new();
     private AppSettings _settings;
     private DockWindow? _dock;
     private Forms.NotifyIcon? _tray;
     private System.Drawing.Icon? _trayIcon;
-    private Task? _monitorTask, _scanTask, _speedTask, _updateTask;
+    private Task? _monitorTask, _scanTask, _speedTask, _updateTask, _checkTask, _driverTask;
     private CancellationTokenSource? _scanCancellation, _speedCancellation;
+    private CancellationTokenSource? _checkCancellation;
+    private bool _loadingSettings;
     private bool _exitRequested, _shutdownComplete, _shuttingDown;
     private string? _releaseUrl;
     private string _driveSignature = "";
@@ -38,8 +43,13 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         _settings = _settingsService.Load();
+        ThemeService.Apply(_settings.Theme);
         InitializeComponent();
         WindowPlacementService.Attach(this);
+        ThemeService.Changed += OnThemeChanged;
+        SystemEvents.UserPreferenceChanged += OnSystemPreferenceChanged;
+        SensorGrid.ItemsSource = _sensorRows;
+        StateChanged += (_, _) => MaximizeGlyph.Data = (Geometry)FindResource(WindowState == WindowState.Maximized ? "IconRestore" : "IconMaximize");
         SidebarVersion.Text = "ROGER / v" + UpdateService.CurrentVersion;
         VersionLabel.Text = "v" + UpdateService.CurrentVersion + " · Windows x64 · MIT License";
         MachineName.Text = Environment.MachineName;
@@ -47,10 +57,13 @@ public partial class MainWindow : Window
         ScanPath.Text = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         LoadSettingsControls();
         RepositoryInput.Text = _settings.UpdateRepository;
+        UpdateThemeGlyph();
+        RefreshHardwareAccess();
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        WindowPlacementService.ApplyTheme(this, ThemeService.IsDark);
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("打开 Roger", null, (_, _) => Dispatcher.Invoke(ShowMain));
         menu.Items.Add("显示 / 隐藏监控条", null, (_, _) => Dispatcher.Invoke(() => { _settings.ShowDock = !_settings.ShowDock; ApplyDock(); SaveQuietly(); LoadSettingsControls(); }));
@@ -88,7 +101,7 @@ public partial class MainWindow : Window
                 CpuName.Text = info.FirstOrDefault(i => i.Category == "CPU")?.Name ?? "未识别";
                 GpuName.Text = string.Join(" / ", info.Where(i => i.Category == "GPU").Select(i => i.Name));
                 if (GpuName.Text.Length == 0) GpuName.Text = "未识别";
-                MachineOs.Text = info.FirstOrDefault(i => i.Category == "操作系统")?.Name ?? MachineOs.Text;
+                MachineOs.Text = info.FirstOrDefault(i => i.Category is "系统" or "操作系统")?.Name ?? MachineOs.Text;
             });
             while (!_lifetime.IsCancellationRequested)
             {
@@ -116,7 +129,7 @@ public partial class MainWindow : Window
         UploadValue.Text = "↑ " + Rate(s.UploadBytesPerSecond);
         NetworkDetail.Text = s.NetworkName; NetworkDetail.ToolTip = s.NetworkName;
         SensorNotice.Text = s.StatusMessage ?? "传感器正常 · 数据仅保存在本机";
-        SensorGrid.ItemsSource = s.Sensors;
+        UpdateSensorRows(s.Sensors);
         PerformanceChart.Add(s.CpuLoad, s.GpuLoad, s.MemoryPercent);
         ChartSpan.Text = $"最近 60 次采样 · {_settings.RefreshIntervalSeconds} 秒间隔";
         FooterStatus.Text = $"● 实时监控   /   {s.Sensors.Count} 个传感器   /   {s.Drives.Count} 个卷";
@@ -131,9 +144,10 @@ public partial class MainWindow : Window
             {
                 var grid = new Grid { Margin = new Thickness(0, 12, 0, 4) };
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) }); grid.ColumnDefinitions.Add(new ColumnDefinition()); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(175) });
-                grid.Children.Add(new TextBlock { Text = d.Name + " " + d.Label, ToolTip = d.Format, Foreground = Brushes.LightSteelBlue, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis });
+                var driveName = new TextBlock { Text = d.Name + " " + d.Label, ToolTip = d.Format, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis };
+                driveName.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimary"); grid.Children.Add(driveName);
                 var bar = new ProgressBar { Value = d.UsedPercent, Margin = new Thickness(12, 0, 18, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = d.UsedPercent > 90 ? Brushes.Salmon : (Brush)FindResource("Accent") }; Grid.SetColumn(bar, 1); grid.Children.Add(bar);
-                var text = new TextBlock { Text = $"{FormatBytes(d.TotalBytes - d.FreeBytes)} / {FormatBytes(d.TotalBytes)}", HorizontalAlignment = HorizontalAlignment.Right, Foreground = (Brush)FindResource("Muted"), FontSize = 11 }; Grid.SetColumn(text, 2); grid.Children.Add(text); DriveCards.Children.Add(grid);
+                var text = new TextBlock { Text = $"{FormatBytes(d.TotalBytes - d.FreeBytes)} / {FormatBytes(d.TotalBytes)}", HorizontalAlignment = HorizontalAlignment.Right, FontSize = 11 }; text.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); Grid.SetColumn(text, 2); grid.Children.Add(text); DriveCards.Children.Add(grid);
             }
         }
     }
@@ -148,6 +162,18 @@ public partial class MainWindow : Window
         NetworkPage.Visibility = tag == "network" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = tag == "settings" ? Visibility.Visible : Visibility.Collapsed;
         UpdatesPage.Visibility = tag == "updates" ? Visibility.Visible : Visibility.Collapsed;
+        FileSystemPage.Visibility = tag == "filesystem" ? Visibility.Visible : Visibility.Collapsed;
+        (string title, string subtitle) = tag switch
+        {
+            "hardware" => ("硬件与传感器", "设备配置、硬件访问状态与实时传感器读数。"),
+            "disk" => ("磁盘空间", "分析目录分布与大文件，了解存储空间的去向。"),
+            "filesystem" => ("文件系统检查", "在 Roger 内查看 Windows 磁盘只读检查报告。"),
+            "network" => ("网络测速", "测量当前连接的下载、上传和 HTTP 延迟。"),
+            "settings" => ("偏好设置", "调整外观、桌面监控条与应用行为。"),
+            "updates" => ("版本与更新", "查看 Roger 版本与开源发布动态。"),
+            _ => ("运行概览", "一览处理器、显卡、内存与网络的实时表现。")
+        };
+        PageTitle.Text = title; PageSubtitle.Text = subtitle;
     }
 
     private void ChooseFolder_Click(object sender, RoutedEventArgs e)
@@ -173,9 +199,9 @@ public partial class MainWindow : Window
             foreach (var entry in result.Children.OrderByDescending(c => c.Bytes).Take(30))
             {
                 var row = new Grid { Margin = new Thickness(0, 4, 0, 4) }; row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) }); row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
-                row.Children.Add(new TextBlock { Text = entry.Name, ToolTip = entry.FullPath, Foreground = Brushes.LightSteelBlue, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 20 });
+                var entryName = new TextBlock { Text = entry.Name, ToolTip = entry.FullPath, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 20 }; entryName.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimary"); row.Children.Add(entryName);
                 var bar = new ProgressBar { Value = result.TotalBytes > 0 ? entry.Bytes * 100d / result.TotalBytes : 0, Margin = new Thickness(10, 0, 20, 0), VerticalAlignment = VerticalAlignment.Center, Height = 8 }; Grid.SetColumn(bar, 1); row.Children.Add(bar);
-                var size = new TextBlock { Text = $"{FormatBytes(entry.Bytes)}  {(result.TotalBytes > 0 ? entry.Bytes * 100d / result.TotalBytes : 0):0.0}%", FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, Foreground = (Brush)FindResource("Muted") }; Grid.SetColumn(size, 2); row.Children.Add(size); DiskBars.Children.Add(row);
+                var size = new TextBlock { Text = $"{FormatBytes(entry.Bytes)}  {(result.TotalBytes > 0 ? entry.Bytes * 100d / result.TotalBytes : 0):0.0}%", FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right }; size.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); Grid.SetColumn(size, 2); row.Children.Add(size); DiskBars.Children.Add(row);
             }
             FilesGrid.ItemsSource = result.LargestFiles.Select(f => new FileView(f.Name, f.FullPath, FormatBytes(f.Bytes))).ToArray();
             ScanErrors.Text = $"逻辑文件大小；硬链接可能重复计数，压缩/稀疏文件与磁盘实际占用可能不同。分布展示前 30 项。跳过 {result.SkippedEntries:N0} 项（包括链接与无权限项）。" + (result.Errors.Count > 0 ? "\n" + string.Join("\n", result.Errors.Take(5)) : "");
@@ -190,15 +216,36 @@ public partial class MainWindow : Window
         if (FilesGrid.SelectedItem is FileView file)
             TryOpen(() => Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + file.FullPath + "\"") { UseShellExecute = true }));
     }
-    private void CheckDisk_Click(object sender, RoutedEventArgs e)
+    private async void CheckDisk_Click(object sender, RoutedEventArgs e)
     {
-        TryOpen(() =>
-        {
-            string root = Path.GetPathRoot(Path.GetFullPath(ScanPath.Text.Trim())) ?? "";
-            if (root.Length != 3 || !char.IsAsciiLetter(root[0]) || root[1] != ':') throw new ArgumentException("只支持本地盘符，请先输入 C:\\ 这样的路径。");
-            return Process.Start(new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe"), "/k chkdsk " + root[..2]) { UseShellExecute = true, Verb = "runas" });
-        });
+        if (_checkTask is { IsCompleted: false }) return;
+        _checkTask = RunFileSystemCheckAsync(); await _checkTask;
     }
+    private async Task RunFileSystemCheckAsync()
+    {
+        _checkCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        var thisRun = _checkCancellation;
+        bool acceptingProgress = true;
+        CheckDiskButton.IsEnabled = false; CancelCheckDiskButton.IsEnabled = true; CheckVolume.IsEnabled = false;
+        CheckDiskProgress.IsIndeterminate = true; CheckDiskReport.Clear(); CheckDiskStatus.Text = "正在启动 Windows 文件系统只读检查…";
+        try
+        {
+            var progress = new Progress<FileSystemCheckProgress>(p =>
+            {
+                if (!acceptingProgress || !ReferenceEquals(_checkCancellation, thisRun) || _shuttingDown) return;
+                CheckDiskReport.AppendText(p.OutputChunk); CheckDiskReport.ScrollToEnd();
+                CheckDiskStatus.Text = $"正在检查 · {p.Elapsed.TotalSeconds:0} 秒 · 可以随时取消";
+            });
+            var result = await _fileSystemCheck.CheckAsync(CheckVolume.Text.Trim(), progress, _checkCancellation.Token);
+            acceptingProgress = false;
+            CheckDiskReport.Text = result.Report;
+            CheckDiskStatus.Text = $"{result.Summary} · 耗时 {result.Elapsed.TotalSeconds:0.0} 秒 · 退出码 {result.ExitCode}";
+        }
+        catch (OperationCanceledException) { acceptingProgress = false; CheckDiskStatus.Text = "检查已取消，当前报告为未完成结果。"; }
+        catch (Exception ex) { acceptingProgress = false; CheckDiskStatus.Text = ex.Message; }
+        finally { acceptingProgress = false; CheckDiskProgress.IsIndeterminate = false; CheckDiskButton.IsEnabled = true; CancelCheckDiskButton.IsEnabled = false; CheckVolume.IsEnabled = true; thisRun.Dispose(); _checkCancellation = null; }
+    }
+    private void CancelCheckDisk_Click(object sender, RoutedEventArgs e) => _checkCancellation?.Cancel();
 
     private async void Speed_Click(object sender, RoutedEventArgs e) { _speedTask = RunSpeedAsync(); await _speedTask; }
     private async Task RunSpeedAsync()
@@ -225,10 +272,13 @@ public partial class MainWindow : Window
 
     private void LoadSettingsControls()
     {
+        _loadingSettings = true;
+        SettingTheme.SelectedIndex = (int)_settings.Theme;
         SettingDock.IsChecked = _settings.ShowDock; SettingCpu.IsChecked = _settings.ShowCpu; SettingGpu.IsChecked = _settings.ShowGpu; SettingMemory.IsChecked = _settings.ShowMemory; SettingNetwork.IsChecked = _settings.ShowNetwork;
         SettingTemperature.IsChecked = _settings.ShowTemperature; SettingCompact.IsChecked = _settings.CompactDock; SettingPosition.SelectedIndex = (int)_settings.DockPosition; SettingOpacity.Value = _settings.DockOpacity;
         SettingTray.IsChecked = _settings.MinimizeToTray; SettingStartup.IsChecked = _settings.LaunchAtLogin; SettingAutoUpdate.IsChecked = _settings.CheckUpdatesOnStartup;
         SettingInterval.SelectedIndex = Array.IndexOf(new[] { 1, 2, 3, 5, 10 }, _settings.RefreshIntervalSeconds);
+        _loadingSettings = false;
     }
     private void SaveSettings_Click(object sender, RoutedEventArgs e)
     {
@@ -240,6 +290,7 @@ public partial class MainWindow : Window
             _settings.ShowTemperature = SettingTemperature.IsChecked == true; _settings.CompactDock = SettingCompact.IsChecked == true; _settings.DockPosition = (DockPosition)Math.Max(0, SettingPosition.SelectedIndex); _settings.DockOpacity = SettingOpacity.Value;
             _settings.MinimizeToTray = SettingTray.IsChecked == true; _settings.LaunchAtLogin = startup; _settings.CheckUpdatesOnStartup = SettingAutoUpdate.IsChecked == true;
             _settings.RefreshIntervalSeconds = SettingInterval.SelectedIndex >= 0 ? new[] { 1, 2, 3, 5, 10 }[SettingInterval.SelectedIndex] : 2;
+            _settings.Theme = (AppTheme)Math.Max(0, SettingTheme.SelectedIndex);
             _settingsService.Save(_settings); ApplyDock(); SidebarInterval.Text = $"每 {_settings.RefreshIntervalSeconds} 秒采样一次"; SettingsStatus.Text = "已保存并应用";
         }
         catch (Exception ex) { SettingsStatus.Text = "保存失败：" + ex.Message; }
@@ -295,8 +346,8 @@ public partial class MainWindow : Window
         if (!_exitRequested && _settings.MinimizeToTray) { Hide(); return; }
         if (_shuttingDown) return;
         _shuttingDown = true; _exitRequested = true; IsEnabled = false; FooterStatus.Text = "正在停止采集…"; _lifetime.Cancel();
-        try { await Task.WhenAll(new[] { _monitorTask, _scanTask, _speedTask, _updateTask }.Where(t => t is not null).Select(t => t!)); } catch (OperationCanceledException) { }
-        finally { _dock?.Close(); _tray?.Dispose(); _trayIcon?.Dispose(); _speedTest.Dispose(); _updater.Dispose(); _lifetime.Dispose(); _shutdownComplete = true; Application.Current.Shutdown(); }
+        try { await Task.WhenAll(new[] { _monitorTask, _scanTask, _speedTask, _updateTask, _checkTask, _driverTask }.Where(t => t is not null).Select(t => t!)); } catch (OperationCanceledException) { }
+        finally { ThemeService.Changed -= OnThemeChanged; SystemEvents.UserPreferenceChanged -= OnSystemPreferenceChanged; _dock?.Close(); _tray?.Dispose(); _trayIcon?.Dispose(); _speedTest.Dispose(); _updater.Dispose(); _lifetime.Dispose(); _shutdownComplete = true; Application.Current.Shutdown(); }
     }
     private static void TryOpen(Func<Process?> action) { try { action(); } catch (Win32Exception ex) when (ex.NativeErrorCode == 1223) { } catch (Exception ex) { MessageBox.Show(ex.Message, "Roger"); } }
     public static string FormatBytes(long bytes) { string[] units = { "B", "KiB", "MiB", "GiB", "TiB" }; double value = bytes; int i = 0; while (value >= 1024 && i < units.Length - 1) { value /= 1024; i++; } return $"{value:0.0} {units[i]}"; }
@@ -304,4 +355,79 @@ public partial class MainWindow : Window
     private static string Percent(double? v) => v.HasValue ? $"{v:0}%" : "—";
     private static string Temperature(double? v) => v.HasValue ? $"{v:0} °C" : "不可用";
     private sealed record FileView(string Name, string FullPath, string Size);
+    private void ToggleTheme_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.Theme = ThemeService.IsDark ? AppTheme.Light : AppTheme.Dark;
+        ThemeService.Apply(_settings.Theme); SaveQuietly(); LoadSettingsControls();
+    }
+    private void Theme_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingSettings || SettingTheme is null || SettingTheme.SelectedIndex < 0 || ThemeGlyph is null) return;
+        _settings.Theme = (AppTheme)SettingTheme.SelectedIndex; ThemeService.Apply(_settings.Theme); SaveQuietly();
+    }
+    private void OnThemeChanged(object? sender, EventArgs e) { UpdateThemeGlyph(); _driveSignature = ""; PerformanceChart.InvalidateVisual(); }
+    private void UpdateThemeGlyph() => ThemeGlyph.Data = (Geometry)FindResource(ThemeService.IsDark ? "IconSun" : "IconMoon");
+    private void OnSystemPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    {
+        if (_settings.Theme == AppTheme.System && !_shuttingDown) Dispatcher.BeginInvoke(() => ThemeService.Apply(AppTheme.System));
+    }
+    private void RefreshHardwareAccess()
+    {
+        var status = HardwareAccessService.GetStatus();
+        AdminBadge.Text = status.IsAdministrator ? "管理员" : "普通权限";
+        AdminButton.SetResourceReference(Button.ForegroundProperty, status.IsAdministrator ? "Accent" : "Muted");
+        AdminButton.ToolTip = status.IsAdministrator ? "管理员模式：可读取底层温度并检查文件系统" : "以管理员身份重启，启用完整硬件访问";
+        HardwareAccessText.Text = status.Summary;
+        InstallDriverButton.IsEnabled = !status.DriverInstalled;
+        InstallDriverButton.Content = status.DriverInstalled ? "温度驱动已安装" : "安装官方温度驱动";
+    }
+    private void Elevate_Click(object sender, RoutedEventArgs e)
+    {
+        if (ElevationService.IsAdministrator) { RefreshHardwareAccess(); FooterStatus.Text = "当前已在管理员模式运行。"; return; }
+        TryOpen(() =>
+        {
+            var process = ElevationService.StartElevatedInstance();
+            if (process is not null) { _exitRequested = true; Close(); }
+            return process;
+        });
+    }
+    private async void InstallDriver_Click(object sender, RoutedEventArgs e)
+    {
+        if (_driverTask is { IsCompleted: false }) return;
+        _driverTask = RunDriverInstallAsync(); await _driverTask;
+    }
+    private async Task RunDriverInstallAsync()
+    {
+        InstallDriverButton.IsEnabled = false;
+        try
+        {
+            HardwareAccessText.Text = "正在下载并校验官方签名温度驱动…";
+            string installer = await HardwareAccessService.DownloadVerifiedDriverAsync(_lifetime.Token);
+            HardwareAccessText.Text = "正在安装官方驱动，请确认 Windows UAC 提示…";
+            await HardwareAccessService.InstallDriverAsync(installer, _lifetime.Token);
+            RefreshHardwareAccess();
+            HardwareAccessText.Text += " 安装完成，正在以管理员身份重新启动采样。";
+            using var restarted = ElevationService.StartElevatedInstance();
+            if (restarted is not null) { _exitRequested = true; Close(); }
+        }
+        catch (OperationCanceledException) { HardwareAccessText.Text = "驱动操作已取消。"; }
+        catch (Exception ex) { HardwareAccessText.Text = "驱动操作未完成：" + ex.Message; }
+        finally { if (!_shuttingDown) InstallDriverButton.IsEnabled = !HardwareAccessService.GetStatus().DriverInstalled; }
+    }
+    private void UpdateSensorRows(IReadOnlyList<SensorReading> readings)
+    {
+        bool same = readings.Count == _sensorRows.Count;
+        if (same) for (int i = 0; i < readings.Count; i++) if (!_sensorRows[i].Matches(readings[i])) { same = false; break; }
+        if (!same) { _sensorRows.Clear(); foreach (var sensor in readings) _sensorRows.Add(new SensorRow(sensor)); }
+        else for (int i = 0; i < readings.Count; i++) _sensorRows[i].Value = readings[i].Value;
+    }
+    private sealed class SensorRow : INotifyPropertyChanged
+    {
+        public string Hardware { get; } public string Name { get; } public string Kind { get; } public string Unit { get; }
+        private double _value;
+        public double Value { get => _value; set { if (_value == value) return; _value = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Value))); } }
+        public SensorRow(SensorReading s) { Hardware = s.Hardware; Name = s.Name; Kind = s.Kind; Unit = s.Unit; _value = s.Value; }
+        public bool Matches(SensorReading s) => Hardware == s.Hardware && Name == s.Name && Kind == s.Kind && Unit == s.Unit;
+        public event PropertyChangedEventHandler? PropertyChanged;
+    }
 }
