@@ -7,6 +7,7 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using Forms = System.Windows.Forms;
 using Roger.Models;
+using Roger.Services;
 
 namespace Roger.Views;
 
@@ -20,6 +21,7 @@ public partial class DockWindow : Window
     private bool _dragging;
     private bool _closed;
     private IntPtr _handle;
+    private readonly DockTopmostService _topmost;
 
     public event EventHandler? OpenRequested;
     public event EventHandler? SettingsChanged;
@@ -35,6 +37,7 @@ public partial class DockWindow : Window
         IsVisibleChanged += (_, _) => { if (IsVisible) SchedulePosition(); };
         SizeChanged += (_, _) => SchedulePosition();
         InitializeComponent();
+        _topmost = new DockTopmostService(this, () => _dragging || Shell.ContextMenu?.IsOpen == true);
         BuildContextMenu();
         ApplySettings(settings);
     }
@@ -55,6 +58,7 @@ public partial class DockWindow : Window
         NetworkGroup.MinWidth = settings.CompactDock ? 94 : 107;
         NetworkUpload.Visibility = VisibleIf(!settings.CompactDock);
         UpdateSnapshot(_snapshot);
+        UpdateTopmostMode();
         SchedulePosition();
     }
 
@@ -117,6 +121,7 @@ public partial class DockWindow : Window
         item.Click += (_, _) =>
         {
             _settings.DockPosition = value;
+            UpdateTopmostMode();
             SchedulePosition();
             SettingsChanged?.Invoke(this, EventArgs.Empty);
         };
@@ -124,6 +129,9 @@ public partial class DockWindow : Window
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e) => EnsureNativeWindow();
+
+    private void UpdateTopmostMode() => _topmost.SetEnabled(
+        _settings.DockPosition is DockPosition.TaskbarLeft or DockPosition.TaskbarRight or DockPosition.Free);
 
     private void EnsureNativeWindow()
     {
@@ -219,6 +227,7 @@ public partial class DockWindow : Window
         top = Math.Clamp(top, bounds.Top, Math.Max(bounds.Top, bounds.Bottom - height));
         // Native physical-pixel positioning avoids mixed-DPI virtual desktop coordinate drift.
         SetWindowPos(_handle, IntPtr.Zero, left, top, 0, 0, 0x0001 | 0x0004 | 0x0010);
+        _topmost.RequestRestore();
     }
 
     private static int SafeCoordinate(double value) => double.IsFinite(value)
@@ -244,6 +253,7 @@ public partial class DockWindow : Window
             _settings.DockPosition = DockPosition.Free;
             _settings.DockLeft = after.Left;
             _settings.DockTop = after.Top;
+            UpdateTopmostMode();
             SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -251,6 +261,7 @@ public partial class DockWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _closed = true;
+        _topmost.Dispose();
         _source?.RemoveHook(WindowHook);
         base.OnClosed(e);
     }

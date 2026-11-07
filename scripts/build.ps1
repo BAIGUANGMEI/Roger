@@ -7,7 +7,7 @@ param(
         [Version]::TryParse($_, [ref]$rogerParsedVersion) -and
             $rogerParsedVersion.Major -lt 65535 -and $rogerParsedVersion.Minor -lt 65535 -and $rogerParsedVersion.Build -lt 65535
     })]
-    [string]$Version = '0.2.0',
+    [string]$Version = '0.2.1',
     [switch]$SkipTests
 )
 
