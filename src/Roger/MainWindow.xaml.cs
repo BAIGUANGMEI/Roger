@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private AppSettings _settings;
     private DockWindow? _dock;
     private Forms.NotifyIcon? _tray;
+    private TrayContextMenu? _trayMenu;
     private System.Drawing.Icon? _trayIcon;
     private Task? _monitorTask, _scanTask, _speedTask, _updateTask, _checkTask, _driverTask;
     private CancellationTokenSource? _scanCancellation, _speedCancellation;
@@ -59,19 +60,35 @@ public partial class MainWindow : Window
         RepositoryInput.Text = _settings.UpdateRepository;
         UpdateThemeGlyph();
         RefreshHardwareAccess();
+        InitializeDeviceViews();
+        OptimizationTools.ItemsSource = OptimizationService.Tools;
+        InitializeObservabilityViews();
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        try
+        {
+            // Persisted opt-in also follows a move from the portable directory to Program Files.
+            if (_settings.LaunchAtLogin)
+                _settingsService.SetLaunchAtLogin(true);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("登录启动任务未能更新。请在偏好设置中关闭再开启登录自启。\n" + ex.Message, "Roger");
+        }
         WindowPlacementService.ApplyTheme(this, ThemeService.IsDark);
-        var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add("打开 Roger", null, (_, _) => Dispatcher.Invoke(ShowMain));
-        menu.Items.Add("显示 / 隐藏监控条", null, (_, _) => Dispatcher.Invoke(() => { _settings.ShowDock = !_settings.ShowDock; ApplyDock(); SaveQuietly(); LoadSettingsControls(); }));
-        menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add("退出 Roger", null, (_, _) => Dispatcher.Invoke(() => { _exitRequested = true; Close(); }));
-        _trayIcon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!) ?? (System.Drawing.Icon)System.Drawing.SystemIcons.Application.Clone();
-        _tray = new Forms.NotifyIcon { Icon = _trayIcon, Text = "Roger · 硬件监控", Visible = true, ContextMenuStrip = menu };
+        _trayMenu = new TrayContextMenu(
+            () => Dispatcher.Invoke(ShowMain),
+            () => Dispatcher.Invoke(() => { _settings.ShowDock = !_settings.ShowDock; ApplyDock(); SaveQuietly(); LoadSettingsControls(); }),
+            () => Dispatcher.Invoke(() => { _exitRequested = true; Close(); }),
+            () => _settings.ShowDock);
+        _trayMenu.VisibleChanged += OnTrayMenuVisibilityChanged;
+        string iconSource = Path.Combine(AppContext.BaseDirectory, "Roger.exe");
+        _trayIcon = System.Drawing.Icon.ExtractAssociatedIcon(File.Exists(iconSource) ? iconSource : Environment.ProcessPath!) ?? (System.Drawing.Icon)System.Drawing.SystemIcons.Application.Clone();
+        _tray = new Forms.NotifyIcon { Icon = _trayIcon, Text = "Roger · 硬件监控", Visible = true, ContextMenuStrip = _trayMenu };
         _tray.DoubleClick += (_, _) => Dispatcher.Invoke(ShowMain);
+        _tray.BalloonTipClicked += (_, _) => Dispatcher.Invoke(() => { ShowMain(); NavAlerts.IsChecked = true; });
         _dock = new DockWindow(_settings);
         _dock.OpenRequested += (_, _) => ShowMain();
         _dock.SettingsChanged += (_, _) => { SaveQuietly(); LoadSettingsControls(); };
@@ -79,6 +96,7 @@ public partial class MainWindow : Window
         SidebarInterval.Text = $"每 {_settings.RefreshIntervalSeconds} 秒采样一次";
         if (_settingsService.LastLoadWarning is string warning) SensorNotice.Text = warning;
         _monitorTask = Task.Run(MonitorLoopAsync);
+        _processTask = Task.Run(ProcessLoopAsync);
         if (Environment.GetCommandLineArgs().Contains("--tray")) Hide();
         if (_settings.CheckUpdatesOnStartup && !string.IsNullOrWhiteSpace(_settings.UpdateRepository)) await CheckUpdatesAsync();
     }
@@ -90,8 +108,9 @@ public partial class MainWindow : Window
             _monitor.Initialize();
             _lifetime.Token.ThrowIfCancellationRequested();
             // Start publishing readings before the slower WMI inventory pass.
-            var first = _monitor.Sample();
+            var first = _monitor.Sample(_settings.SelectedGpuId);
             await Dispatcher.InvokeAsync(() => DisplaySnapshot(first));
+            RecordObservability(first);
             _lifetime.Token.ThrowIfCancellationRequested();
             var info = _monitor.GetHardwareInfo();
             await Dispatcher.InvokeAsync(() =>
@@ -103,16 +122,26 @@ public partial class MainWindow : Window
                 if (GpuName.Text.Length == 0) GpuName.Text = "未识别";
                 MachineOs.Text = info.FirstOrDefault(i => i.Category is "系统" or "操作系统")?.Name ?? MachineOs.Text;
             });
+            _lifetime.Token.ThrowIfCancellationRequested();
+            _storageMonitor.Initialize();
+            var firstStorage = _storageMonitor.Sample(first.Sensors);
+            await Dispatcher.InvokeAsync(() => DisplayStorageSnapshot(firstStorage));
             while (!_lifetime.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(_settings.RefreshIntervalSeconds), _lifetime.Token);
-                try { var snapshot = _monitor.Sample(); await Dispatcher.InvokeAsync(() => DisplaySnapshot(snapshot)); }
+                try
+                {
+                    var snapshot = _monitor.Sample(_settings.SelectedGpuId);
+                    var storage = _storageMonitor.Sample(snapshot.Sensors);
+                    RecordObservability(snapshot, storage);
+                    await Dispatcher.InvokeAsync(() => { DisplaySnapshot(snapshot); DisplayStorageSnapshot(storage); });
+                }
                 catch (Exception ex) when (ex is not OperationCanceledException) { await Dispatcher.InvokeAsync(() => FooterStatus.Text = "采样暂时失败：" + ex.Message); }
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { await Dispatcher.InvokeAsync(() => { SensorNotice.Text = "硬件采集失败：" + ex.Message; FooterStatus.Text = "请检查驱动与硬件支持情况"; }); }
-        finally { _monitor.Dispose(); }
+        finally { _storageMonitor.Dispose(); _monitor.Dispose(); }
     }
 
     private void DisplaySnapshot(MonitorSnapshot s)
@@ -130,6 +159,14 @@ public partial class MainWindow : Window
         NetworkDetail.Text = s.NetworkName; NetworkDetail.ToolTip = s.NetworkName;
         SensorNotice.Text = s.StatusMessage ?? "传感器正常 · 数据仅保存在本机";
         UpdateSensorRows(s.Sensors);
+        DisplayDeviceSnapshot(s);
+        // Reset on the device actually delivered by the sampler. A snapshot may already be
+        // in flight when the user changes selection, and automatic selection can also change.
+        if (_chartedGpuId != s.SelectedGpuId)
+        {
+            _chartedGpuId = s.SelectedGpuId;
+            PerformanceChart.Reset();
+        }
         PerformanceChart.Add(s.CpuLoad, s.GpuLoad, s.MemoryPercent);
         ChartSpan.Text = $"最近 60 次采样 · {_settings.RefreshIntervalSeconds} 秒间隔";
         FooterStatus.Text = $"● 实时监控   /   {s.Sensors.Count} 个传感器   /   {s.Drives.Count} 个卷";
@@ -163,9 +200,19 @@ public partial class MainWindow : Window
         SettingsPage.Visibility = tag == "settings" ? Visibility.Visible : Visibility.Collapsed;
         UpdatesPage.Visibility = tag == "updates" ? Visibility.Visible : Visibility.Collapsed;
         FileSystemPage.Visibility = tag == "filesystem" ? Visibility.Visible : Visibility.Collapsed;
+        StorageHardwarePage.Visibility = tag == "storage" ? Visibility.Visible : Visibility.Collapsed;
+        ToolboxPage.Visibility = tag == "toolbox" ? Visibility.Visible : Visibility.Collapsed;
+        AlertsPage.Visibility = tag == "alerts" ? Visibility.Visible : Visibility.Collapsed;
+        ProcessPage.Visibility = tag == "processes" ? Visibility.Visible : Visibility.Collapsed;
+        HistoryPage.Visibility = tag == "history" ? Visibility.Visible : Visibility.Collapsed;
         (string title, string subtitle) = tag switch
         {
             "hardware" => ("硬件与传感器", "设备配置、硬件访问状态与实时传感器读数。"),
+            "storage" => ("硬盘硬件", "按物理设备查看活动率、读写速度、温度与存储状态。"),
+            "toolbox" => ("优化工具箱", "查看当前设置，再选择需要的维护和优化操作。"),
+            "processes" => ("进程资源排行", "定位 CPU、内存与进程 I/O 占用最多的程序。"),
+            "alerts" => ("异常提醒", "设置持续异常的判断条件，查看本地提醒记录。"),
+            "history" => ("历史监控", "回看最近七天的分钟趋势与采样峰值。"),
             "disk" => ("磁盘空间", "分析目录分布与大文件，了解存储空间的去向。"),
             "filesystem" => ("文件系统检查", "在 Roger 内查看 Windows 磁盘只读检查报告。"),
             "network" => ("网络测速", "测量当前连接的下载、上传和 HTTP 延迟。"),
@@ -174,6 +221,9 @@ public partial class MainWindow : Window
             _ => ("运行概览", "一览处理器、显卡、内存与网络的实时表现。")
         };
         PageTitle.Text = title; PageSubtitle.Text = subtitle;
+        if (tag == "toolbox") _ = RefreshOptimizationStateAsync();
+        if (tag == "history") _ = RefreshHistoryAsync();
+        if (tag == "alerts") RefreshAlertRecords();
     }
 
     private void ChooseFolder_Click(object sender, RoutedEventArgs e)
@@ -333,6 +383,10 @@ public partial class MainWindow : Window
     private void OpenRelease_Click(object sender, RoutedEventArgs e) { if (_releaseUrl is not null) TryOpen(() => Process.Start(new ProcessStartInfo(_releaseUrl) { UseShellExecute = true })); }
 
     private void ApplyDock() { if (_dock is null) return; _dock.ApplySettings(_settings); if (_settings.ShowDock) _dock.Show(); else _dock.Hide(); }
+    private void OnTrayMenuVisibilityChanged(object? sender, EventArgs e)
+    {
+        if (!_shuttingDown) _dock?.SetExternalMenuOpen(_trayMenu?.Visible == true);
+    }
     private void SaveQuietly() { try { _settingsService.Save(_settings); } catch (Exception ex) { FooterStatus.Text = "设置未保存：" + ex.Message; } }
     private void ShowMain() { Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
     private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e) { if (e.ClickCount == 2) Maximize_Click(sender, e); else if (e.LeftButton == MouseButtonState.Pressed) DragMove(); }
@@ -346,8 +400,19 @@ public partial class MainWindow : Window
         if (!_exitRequested && _settings.MinimizeToTray) { Hide(); return; }
         if (_shuttingDown) return;
         _shuttingDown = true; _exitRequested = true; IsEnabled = false; FooterStatus.Text = "正在停止采集…"; _lifetime.Cancel();
-        try { await Task.WhenAll(new[] { _monitorTask, _scanTask, _speedTask, _updateTask, _checkTask, _driverTask }.Where(t => t is not null).Select(t => t!)); } catch (OperationCanceledException) { }
-        finally { ThemeService.Changed -= OnThemeChanged; SystemEvents.UserPreferenceChanged -= OnSystemPreferenceChanged; _dock?.Close(); _tray?.Dispose(); _trayIcon?.Dispose(); _speedTest.Dispose(); _updater.Dispose(); _lifetime.Dispose(); _shutdownComplete = true; Application.Current.Shutdown(); }
+        try { await Task.WhenAll(new[] { _monitorTask, _scanTask, _speedTask, _updateTask, _checkTask, _driverTask, _toolboxStateTask, _dnsTask, _processTask, _historyReadTask, _historyExportTask }.Where(t => t is not null).Select(t => t!)); } catch (OperationCanceledException) { }
+        finally { await Task.Run(_history.Dispose); ThemeService.Changed -= OnThemeChanged; SystemEvents.UserPreferenceChanged -= OnSystemPreferenceChanged; DisposeTray(); _dock?.Close(); _speedTest.Dispose(); _updater.Dispose(); _lifetime.Dispose(); _shutdownComplete = true; Application.Current.Shutdown(); }
+    }
+    private void DisposeTray()
+    {
+        if (_trayMenu is not null)
+        {
+            _trayMenu.VisibleChanged -= OnTrayMenuVisibilityChanged;
+            _trayMenu.Dispose();
+            _trayMenu = null;
+        }
+        _tray?.Dispose();
+        _trayIcon?.Dispose();
     }
     private static void TryOpen(Func<Process?> action) { try { action(); } catch (Win32Exception ex) when (ex.NativeErrorCode == 1223) { } catch (Exception ex) { MessageBox.Show(ex.Message, "Roger"); } }
     public static string FormatBytes(long bytes) { string[] units = { "B", "KiB", "MiB", "GiB", "TiB" }; double value = bytes; int i = 0; while (value >= 1024 && i < units.Length - 1) { value /= 1024; i++; } return $"{value:0.0} {units[i]}"; }
@@ -365,7 +430,7 @@ public partial class MainWindow : Window
         if (_loadingSettings || SettingTheme is null || SettingTheme.SelectedIndex < 0 || ThemeGlyph is null) return;
         _settings.Theme = (AppTheme)SettingTheme.SelectedIndex; ThemeService.Apply(_settings.Theme); SaveQuietly();
     }
-    private void OnThemeChanged(object? sender, EventArgs e) { UpdateThemeGlyph(); _driveSignature = ""; PerformanceChart.InvalidateVisual(); }
+    private void OnThemeChanged(object? sender, EventArgs e) { UpdateThemeGlyph(); _driveSignature = ""; PerformanceChart.InvalidateVisual(); StorageRateChart.InvalidateVisual(); HistoricalChart.InvalidateVisual(); }
     private void UpdateThemeGlyph() => ThemeGlyph.Data = (Geometry)FindResource(ThemeService.IsDark ? "IconSun" : "IconMoon");
     private void OnSystemPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {

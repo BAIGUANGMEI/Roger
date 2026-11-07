@@ -5,7 +5,7 @@ param(
         [Version]::TryParse($_, [ref]$rogerParsedVersion) -and
             $rogerParsedVersion.Major -lt 65535 -and $rogerParsedVersion.Minor -lt 65535 -and $rogerParsedVersion.Build -lt 65535
     })]
-    [string]$Version = '0.2.1'
+    [string]$Version = '0.3.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -27,12 +27,13 @@ if (Test-Path -LiteralPath $rogerOutput) {
 
 Push-Location $rogerRoot
 try {
-    & $rogerDotnet publish 'src/Roger/Roger.csproj' --configuration Release --runtime win-x64 --self-contained true "-p:Version=$Version" '-p:PublishSingleFile=false' '-p:PublishTrimmed=false' --output $rogerOutput
+    & $rogerDotnet publish 'src/Roger/Roger.csproj' --configuration Release --runtime win-x64 --self-contained true "-p:Version=$Version" '-p:PublishSingleFile=false' '-p:PublishTrimmed=false' '-p:UseSharedCompilation=false' --output $rogerOutput
     if ($LASTEXITCODE -ne 0) { throw 'Roger publish failed.' }
     $rogerPublishedVersion = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $rogerOutput 'Roger.dll')).Version.ToString(3)
     if ($rogerPublishedVersion -ne $Version) { throw "Published assembly version $rogerPublishedVersion does not match requested release $Version." }
     Copy-Item -LiteralPath (Join-Path $rogerRoot 'LICENSE'), (Join-Path $rogerRoot 'README.md'), (Join-Path $rogerRoot 'THIRD-PARTY-NOTICES.md') -Destination $rogerOutput
     Copy-Item -LiteralPath (Join-Path $rogerRoot 'third_party') -Destination (Join-Path $rogerOutput 'third_party') -Recurse
+    Copy-Item -LiteralPath (Join-Path $rogerRoot 'docs') -Destination (Join-Path $rogerOutput 'docs') -Recurse
     # Keep original package metadata and supplied license/notice texts with the release.
     $rogerAssets = Get-Content -LiteralPath (Join-Path $rogerRoot 'src/Roger/obj/project.assets.json') -Raw | ConvertFrom-Json
     foreach ($rogerLibrary in $rogerAssets.libraries.PSObject.Properties) {

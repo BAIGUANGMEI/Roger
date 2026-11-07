@@ -62,92 +62,136 @@
       </Grid>
     </Border>
     <Border Grid.Row="1" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
-      <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Margin="0,24,0,0">
-          <TextBlock Text="监控与工具" Foreground="{DynamicResource Faint}" FontSize="10" Margin="28,0,0,13" />
-          <RadioButton x:Name="NavOverview" Tag="overview" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" IsChecked="True" AutomationProperties.Name="运行概览">
-            <StackPanel Orientation="Horizontal">
-              <Viewbox Width="18" Height="18">
-                <Canvas Width="24" Height="24">
-                  <Path Data="{StaticResource IconOverview}" Style="{StaticResource IconPath}" />
-                </Canvas>
-              </Viewbox>
-              <TextBlock Text="运行概览" Margin="13,0,0,0" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton Tag="hardware" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="硬件与传感器">
-            <StackPanel Orientation="Horizontal">
-              <Viewbox Width="18" Height="18">
-                <Canvas Width="24" Height="24">
-                  <Path Data="{StaticResource IconHardware}" Style="{StaticResource IconPath}" />
-                </Canvas>
-              </Viewbox>
-              <TextBlock Text="硬件与传感器" Margin="13,0,0,0" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton Tag="disk" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="磁盘空间">
-            <StackPanel Orientation="Horizontal">
-              <Viewbox Width="18" Height="18">
-                <Canvas Width="24" Height="24">
-                  <Path Data="{StaticResource IconDisk}" Style="{StaticResource IconPath}" />
-                </Canvas>
-              </Viewbox>
-              <TextBlock Text="磁盘空间" Margin="13,0,0,0" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavFileSystem" Tag="filesystem" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="文件系统检查">
-            <StackPanel Orientation="Horizontal">
-              <Viewbox Width="18" Height="18">
-                <Canvas Width="24" Height="24">
-                  <Path Data="{StaticResource IconScan}" Style="{StaticResource IconPath}" />
-                </Canvas>
-              </Viewbox>
-              <TextBlock Text="文件系统检查" Margin="13,0,0,0" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton Tag="network" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="网络测速">
-            <StackPanel Orientation="Horizontal">
-              <Viewbox Width="18" Height="18">
-                <Canvas Width="24" Height="24">
-                  <Path Data="{StaticResource IconNetwork}" Style="{StaticResource IconPath}" />
-                </Canvas>
-              </Viewbox>
-              <TextBlock Text="网络测速" Margin="13,0,0,0" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <Border Height="1" Background="{DynamicResource Line}" Margin="26,18" />
-          <RadioButton Tag="settings" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="偏好设置">
-            <StackPanel Orientation="Horizontal">
-              <Viewbox Width="18" Height="18">
-                <Canvas Width="24" Height="24">
-                  <Path Data="{StaticResource IconSettings}" Style="{StaticResource IconPath}" />
-                </Canvas>
-              </Viewbox>
-              <TextBlock Text="偏好设置" Margin="13,0,0,0" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton Tag="updates" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="版本与更新">
-            <StackPanel Orientation="Horizontal">
-              <Viewbox Width="18" Height="18">
-                <Canvas Width="24" Height="24">
-                  <Path Data="{StaticResource IconUpdates}" Style="{StaticResource IconPath}" />
-                </Canvas>
-              </Viewbox>
-              <TextBlock Text="版本与更新" Margin="13,0,0,0" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-        </StackPanel>
-        <StackPanel DockPanel.Dock="Bottom" Margin="22,0,22,22">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,3,8">
+          <StackPanel Margin="0,24,0,0">
+            <TextBlock Text="硬件监控" Foreground="{DynamicResource Faint}" FontSize="10" Margin="28,0,0,13" />
+            <RadioButton x:Name="NavOverview" Tag="overview" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" IsChecked="True" AutomationProperties.Name="运行概览">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="18" Height="18">
+                  <Canvas Width="24" Height="24">
+                    <Path Data="{StaticResource IconOverview}" Style="{StaticResource IconPath}" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Text="运行概览" Margin="13,0,0,0" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Tag="hardware" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="硬件与传感器">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="18" Height="18">
+                  <Canvas Width="24" Height="24">
+                    <Path Data="{StaticResource IconHardware}" Style="{StaticResource IconPath}" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Text="硬件与传感器" Margin="13,0,0,0" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavStorage" Tag="storage" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="硬盘硬件">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="18" Height="18">
+                  <Canvas Width="24" Height="24">
+                    <Path Data="{StaticResource IconDisk}" Style="{StaticResource IconPath}" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Text="硬盘硬件" Margin="13,0,0,0" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Tag="network" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="网络测速">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="18" Height="18">
+                  <Canvas Width="24" Height="24">
+                    <Path Data="{StaticResource IconNetwork}" Style="{StaticResource IconPath}" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Text="网络测速" Margin="13,0,0,0" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Tag="processes" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="进程资源排行">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="18" Height="18"><Canvas Width="24" Height="24"><Path Data="{StaticResource IconHardware}" Style="{StaticResource IconPath}"/></Canvas></Viewbox>
+                <TextBlock Text="进程资源排行" Margin="13,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Tag="history" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="历史监控">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="18" Height="18"><Canvas Width="24" Height="24"><Path Data="{StaticResource IconOverview}" Style="{StaticResource IconPath}"/></Canvas></Viewbox>
+                <TextBlock Text="历史监控" Margin="13,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavAlerts" Tag="alerts" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="异常提醒">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="18" Height="18"><Canvas Width="24" Height="24"><Path Data="{StaticResource IconShield}" Style="{StaticResource IconPath}"/></Canvas></Viewbox>
+                <TextBlock Text="异常提醒" Margin="13,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </RadioButton>
+            <TextBlock Text="维护工具" Foreground="{DynamicResource Faint}" FontSize="10" Margin="28,20,0,10" />
+            <RadioButton Tag="disk" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="磁盘空间">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="18" Height="18">
+                  <Canvas Width="24" Height="24">
+                    <Path Data="{StaticResource IconDisk}" Style="{StaticResource IconPath}" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Text="磁盘空间" Margin="13,0,0,0" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavFileSystem" Tag="filesystem" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="文件系统检查">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="18" Height="18">
+                  <Canvas Width="24" Height="24">
+                    <Path Data="{StaticResource IconScan}" Style="{StaticResource IconPath}" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Text="文件系统检查" Margin="13,0,0,0" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="NavToolbox" Tag="toolbox" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="优化工具箱">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="18" Height="18">
+                  <Canvas Width="24" Height="24">
+                    <Path Data="{StaticResource IconSettings}" Style="{StaticResource IconPath}" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Text="优化工具箱" Margin="13,0,0,0" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+            <Border Height="1" Background="{DynamicResource Line}" Margin="26,18" />
+            <RadioButton Tag="settings" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="偏好设置">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="18" Height="18">
+                  <Canvas Width="24" Height="24">
+                    <Path Data="{StaticResource IconSettings}" Style="{StaticResource IconPath}" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Text="偏好设置" Margin="13,0,0,0" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Tag="updates" GroupName="Nav" Style="{StaticResource Nav}" Checked="Navigate_Checked" AutomationProperties.Name="版本与更新">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="18" Height="18">
+                  <Canvas Width="24" Height="24">
+                    <Path Data="{StaticResource IconUpdates}" Style="{StaticResource IconPath}" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Text="版本与更新" Margin="13,0,0,0" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+          </StackPanel>
+        </ScrollViewer>
+        <StackPanel Margin="22,0,22,22" Grid.Row="1">
           <Border Background="{DynamicResource AccentSoft}" CornerRadius="10" Padding="13">
             <StackPanel>
               <TextBlock Text="●  监控运行中" Foreground="{DynamicResource Accent}" FontSize="12" />
               <TextBlock x:Name="SidebarInterval" Text="每2秒采样" Style="{StaticResource MutedText}" Margin="0,7,0,0" />
             </StackPanel>
           </Border>
-          <TextBlock x:Name="SidebarVersion" Text="ROGER / v0.2.0" FontFamily="Segoe UI" FontSize="10" Foreground="{DynamicResource Faint}" Margin="2,18,0,0" />
+          <TextBlock x:Name="SidebarVersion" Text="ROGER / v0.3.0" FontFamily="Segoe UI" FontSize="10" Foreground="{DynamicResource Faint}" Margin="2,18,0,0" />
         </StackPanel>
-        <Grid />
-      </DockPanel>
+      </Grid>
     </Border>
     <Grid Grid.Row="1" Grid.Column="1" Margin="28,24,18,16">
       <Grid.RowDefinitions>
@@ -266,6 +310,62 @@
                 </StackPanel>
               </Grid>
             </Border>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,18">
+              <StackPanel>
+                <TextBlock Text="CPU 实时数据" Style="{StaticResource SectionTitle}" />
+                <DataGrid x:Name="CpuDevicesGrid" Height="112" Margin="0,15,0,0">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="处理器 / 品牌" Binding="{Binding Name}" Width="2*" />
+                    <DataGridTextColumn Header="品牌" Binding="{Binding Vendor}" Width="90" />
+                    <DataGridTextColumn Header="使用率" Binding="{Binding LoadText}" Width="80" />
+                    <DataGridTextColumn Header="温度" Binding="{Binding TemperatureText}" Width="90" />
+                    <DataGridTextColumn Header="来源与状态" Binding="{Binding StatusText}" Width="2*" />
+                  </DataGrid.Columns>
+                </DataGrid>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,18">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="GPU 与显存" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Text="选择概览与监控条显示的显卡，专用 GPU 内存和共享 GPU 内存分别统计。" Style="{StaticResource MutedText}" Margin="0,7,10,0" />
+                  </StackPanel>
+                  <ComboBox x:Name="GpuSelector" Grid.Column="1" Width="290" DisplayMemberPath="Label" SelectedValuePath="Id" SelectionChanged="GpuSelector_Changed" AutomationProperties.Name="概览使用的显卡" />
+                </Grid>
+                <DataGrid x:Name="GpuDevicesGrid" Height="160" Margin="0,15,0,0">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="显卡" Binding="{Binding Name}" Width="2*" />
+                    <DataGridTextColumn Header="品牌" Binding="{Binding Vendor}" Width="70" />
+                    <DataGridTextColumn Header="占用" Binding="{Binding LoadText}" Width="65" />
+                    <DataGridTextColumn Header="温度" Binding="{Binding TemperatureText}" Width="80" />
+                    <DataGridTextColumn Header="专用 GPU 内存" Binding="{Binding DedicatedText}" Width="130" />
+                    <DataGridTextColumn Header="共享 GPU 内存" Binding="{Binding SharedText}" Width="130" />
+                  </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock x:Name="GpuDeviceStatus" Style="{StaticResource MutedText}" Margin="0,12,0,0" />
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,22">
+              <StackPanel>
+                <TextBlock Text="内存条" Style="{StaticResource SectionTitle}" />
+                <TextBlock Text="总占用由 Windows 物理内存接口读取；品牌、型号、插槽及配置速率由固件提供。" Style="{StaticResource MutedText}" Margin="0,7,0,12" />
+                <DataGrid x:Name="MemoryModulesGrid" Height="160">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="插槽" Binding="{Binding Slot}" Width="90" />
+                    <DataGridTextColumn Header="厂商" Binding="{Binding Manufacturer}" Width="*" />
+                    <DataGridTextColumn Header="型号" Binding="{Binding PartNumber}" Width="2*" />
+                    <DataGridTextColumn Header="容量" Binding="{Binding CapacityText}" Width="90" />
+                    <DataGridTextColumn Header="配置 / 固件速率" Binding="{Binding SpeedText}" Width="160" />
+                  </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock x:Name="MemoryModuleStatus" Style="{StaticResource MutedText}" Margin="0,10,0,0" />
+              </StackPanel>
+            </Border>
             <TextBlock Text="设备配置" FontSize="16" Margin="0,0,0,12" FontWeight="SemiBold" />
             <DataGrid x:Name="HardwareGrid" Height="260" EnableRowVirtualization="True">
               <DataGrid.Columns>
@@ -365,6 +465,115 @@
             </Border>
           </StackPanel>
         </ScrollViewer>
+        <ScrollViewer x:Name="AlertsPage" Visibility="Collapsed" Padding="0,0,12,8">
+          <StackPanel>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,18">
+              <StackPanel>
+                <TextBlock Text="让持续异常得到提醒" Style="{StaticResource SectionTitle}" />
+                <TextBlock Text="仅在有效读数持续达到条件后记录异常。同一项目受冷却时间限制；传感器不可用时暂停判断。" Style="{StaticResource MutedText}" Margin="0,8,0,18" />
+                <WrapPanel Margin="0,0,0,20">
+                  <CheckBox x:Name="AlertsEnabled" Content="开启异常提醒" Margin="0,0,28,8" />
+                  <CheckBox x:Name="AlertsQuiet" Content="静音，只保留记录" Margin="0,0,0,8" />
+                </WrapPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                  <StackPanel Margin="0,0,20,18"><CheckBox x:Name="AlertCpuEnabled" Content="CPU 温度上限（°C）"/><TextBox x:Name="AlertCpuThreshold" Margin="0,9,0,0" AutomationProperties.Name="CPU温度阈值"/></StackPanel>
+                  <StackPanel Grid.Column="1" Margin="0,0,0,18"><CheckBox x:Name="AlertGpuEnabled" Content="GPU 温度上限（°C）"/><TextBox x:Name="AlertGpuThreshold" Margin="0,9,0,0" AutomationProperties.Name="GPU温度阈值"/></StackPanel>
+                  <StackPanel Grid.Row="1" Margin="0,0,20,18"><CheckBox x:Name="AlertMemoryEnabled" Content="内存占用上限（%）"/><TextBox x:Name="AlertMemoryThreshold" Margin="0,9,0,0" AutomationProperties.Name="内存占用阈值"/></StackPanel>
+                  <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,18"><CheckBox x:Name="AlertDiskEnabled" Content="各卷剩余空间下限（%）"/><TextBox x:Name="AlertDiskThreshold" Margin="0,9,0,0" AutomationProperties.Name="磁盘剩余空间阈值"/></StackPanel>
+                  <StackPanel Grid.Row="2" Margin="0,0,20,0"><TextBlock Text="持续时间（秒）" Style="{StaticResource MutedText}"/><TextBox x:Name="AlertDuration" Margin="0,9,0,0" AutomationProperties.Name="异常持续时间"/></StackPanel>
+                  <StackPanel Grid.Row="2" Grid.Column="1"><TextBlock Text="同一项目提醒冷却（秒）" Style="{StaticResource MutedText}"/><TextBox x:Name="AlertCooldown" Margin="0,9,0,0" AutomationProperties.Name="异常提醒冷却时间"/></StackPanel>
+                </Grid>
+                <Button Content="保存提醒设置" Click="SaveAlerts_Click" Style="{StaticResource Primary}" HorizontalAlignment="Left" Margin="0,20,0,0" />
+                <TextBlock x:Name="AlertStatus" Style="{StaticResource MutedText}" Margin="0,14,0,0"/>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <Grid Margin="0,0,0,14"><TextBlock Text="最近异常记录" Style="{StaticResource SectionTitle}"/><Button Content="清空记录" Click="ClearAlerts_Click" HorizontalAlignment="Right" Padding="12,6"/></Grid>
+                <DataGrid x:Name="AlertRecordsGrid" Height="300">
+                  <DataGrid.RowStyle><Style TargetType="DataGridRow"><Setter Property="ToolTip" Value="{Binding Message}"/></Style></DataGrid.RowStyle>
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="时间" Binding="{Binding Time}" Width="145"/>
+                    <DataGridTextColumn Header="项目" Binding="{Binding Title}" Width="140"/>
+                    <DataGridTextColumn Header="详情" Binding="{Binding Message}" Width="*"/>
+                  </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="本地保留最近 500 条记录。Windows 通知的显示还取决于系统通知与免打扰设置。" Style="{StaticResource MutedText}" Margin="0,12,0,0"/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+        <ScrollViewer x:Name="HistoryPage" Visibility="Collapsed" Padding="0,0,12,8">
+          <StackPanel>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,18">
+              <StackPanel>
+                <TextBlock Text="回看电脑的运行状态" Style="{StaticResource SectionTitle}"/>
+                <TextBlock Text="运行期间持续采集，按分钟汇总并保留最近七天。关闭软件的时段留空，重新启动后继续积累。" Style="{StaticResource MutedText}" Margin="0,8,0,16"/>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="170"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <ComboBox x:Name="HistoryRange" MinWidth="0" SelectionChanged="HistorySelection_Changed" Margin="0,0,12,0" AutomationProperties.Name="历史时间范围"><ComboBoxItem Content="最近一小时"/><ComboBoxItem Content="最近一天"/><ComboBoxItem Content="最近七天"/></ComboBox>
+                  <ComboBox x:Name="HistoryMetric" MinWidth="0" Grid.Column="1" SelectionChanged="HistorySelection_Changed" Margin="0,0,12,0" AutomationProperties.Name="历史指标"><ComboBoxItem Content="使用率"/><ComboBoxItem Content="CPU / GPU 温度"/><ComboBoxItem Content="网络吞吐"/><ComboBoxItem Content="物理盘读写"/></ComboBox>
+                  <ComboBox x:Name="HistoryGpu" Grid.Column="2" DisplayMemberPath="Name" SelectedValuePath="Id" SelectionChanged="HistorySelection_Changed" AutomationProperties.Name="历史显卡设备"/>
+                </Grid>
+              </StackPanel>
+            </Border>
+            <UniformGrid Columns="3" Margin="0,0,-12,18">
+              <Border Style="{StaticResource Card}" Margin="0,0,12,0" Padding="18"><StackPanel><TextBlock x:Name="HistorySummaryOneTitle" Text="CPU" Style="{StaticResource MutedText}"/><TextBlock x:Name="HistorySummaryOne" Text="暂无有效读数" FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource CpuAccent}" Margin="0,12,0,0"/></StackPanel></Border>
+              <Border Style="{StaticResource Card}" Margin="0,0,12,0" Padding="18"><StackPanel><TextBlock x:Name="HistorySummaryTwoTitle" Text="GPU" Style="{StaticResource MutedText}"/><TextBlock x:Name="HistorySummaryTwo" Text="暂无有效读数" FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource GpuAccent}" Margin="0,12,0,0"/></StackPanel></Border>
+              <Border Style="{StaticResource Card}" Margin="0,0,12,0" Padding="18"><StackPanel><TextBlock x:Name="HistorySummaryThreeTitle" Text="内存" Style="{StaticResource MutedText}"/><TextBlock x:Name="HistorySummaryThree" Text="暂无有效读数" FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource MemoryAccent}" Margin="0,12,0,0"/></StackPanel></Border>
+            </UniformGrid>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <TextBlock Text="分钟趋势" Style="{StaticResource SectionTitle}"/>
+                <views:HistoryTrendChart x:Name="HistoricalChart" Height="255" Margin="0,20,0,8"/>
+                <StackPanel Orientation="Horizontal"><TextBlock x:Name="HistoryLegendOne" Text="● CPU" Foreground="{DynamicResource CpuAccent}" Margin="0,0,22,0"/><TextBlock x:Name="HistoryLegendTwo" Text="● GPU" Foreground="{DynamicResource GpuAccent}" Margin="0,0,22,0"/><TextBlock x:Name="HistoryLegendThree" Text="● 内存" Foreground="{DynamicResource MemoryAccent}"/></StackPanel>
+                <TextBlock x:Name="HistoryStatus" Text="打开页面后读取本地历史。" Style="{StaticResource MutedText}" Margin="0,18,0,0"/>
+                <WrapPanel Margin="0,18,0,0"><Button Content="刷新历史" Click="RefreshHistory_Click" Margin="0,0,12,0"/><Button x:Name="ExportHistoryButton" Content="导出七天 CSV" Click="ExportHistory_Click"/></WrapPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+
+<ScrollViewer x:Name="ProcessPage" Visibility="Collapsed" Padding="0,0,12,8" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StackPanel>
+    <Border Style="{StaticResource Card}" Margin="0,0,0,18">
+      <StackPanel>
+        <TextBlock Text="找到资源占用最多的程序" Style="{StaticResource SectionTitle}" />
+        <TextBlock Text="每 2 秒更新，只读取进程状态。按 CPU、内存或 I/O 排序，支持程序名和 PID 搜索。" Style="{StaticResource MutedText}" Margin="0,8,0,17" />
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="210"/></Grid.ColumnDefinitions>
+          <TextBox x:Name="ProcessFilter" TextChanged="ProcessFilter_Changed" Margin="0,0,14,0" ToolTip="按程序名称或 PID 搜索" AutomationProperties.Name="搜索程序名称或 PID" />
+          <ComboBox x:Name="ProcessSort" Grid.Column="1" DisplayMemberPath="Label" SelectionChanged="ProcessSort_Changed" AutomationProperties.Name="进程资源排序指标" />
+        </Grid>
+      </StackPanel>
+    </Border>
+    <Border Style="{StaticResource Card}">
+      <StackPanel>
+        <TextBlock x:Name="ProcessSummary" Text="等待进程采样" Style="{StaticResource SectionTitle}" />
+        <TextBlock x:Name="ProcessUpdated" Text="CPU 与 I/O 速率需要相邻两次采样。" Style="{StaticResource MutedText}" Margin="0,7,0,15" />
+        <DataGrid x:Name="ProcessesGrid" Height="440" CanUserSortColumns="False" EnableRowVirtualization="True" EnableColumnVirtualization="True">
+          <DataGrid.RowStyle>
+            <Style TargetType="DataGridRow"><Setter Property="ToolTip" Value="{Binding Details}" /></Style>
+          </DataGrid.RowStyle>
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="#" Binding="{Binding Rank}" Width="45"/>
+            <DataGridTextColumn Header="程序" Binding="{Binding Name}" Width="*" MinWidth="150"/>
+            <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="75"/>
+            <DataGridTextColumn Header="CPU" Binding="{Binding CpuText}" Width="80"/>
+            <DataGridTextColumn Header="内存工作集" Binding="{Binding MemoryText}" Width="105"/>
+            <DataGridTextColumn Header="I/O 读取" Binding="{Binding ReadText}" Width="105"/>
+            <DataGridTextColumn Header="I/O 写入" Binding="{Binding WriteText}" Width="105"/>
+          </DataGrid.Columns>
+        </DataGrid>
+        <TextBlock Text="将鼠标停留在进程行上可查看程序路径和数据可用性。" Style="{StaticResource MutedText}" Margin="0,12,0,0" />
+      </StackPanel>
+    </Border>
+    <TextBlock x:Name="ProcessNotice" Text="受保护的系统进程可能无法读取部分字段；缺失数据不会显示为零。" Style="{StaticResource MutedText}" Margin="0,14,0,0" />
+  </StackPanel>
+</ScrollViewer>
+
         <ScrollViewer x:Name="SettingsPage" Visibility="Collapsed" Padding="0,0,12,8">
           <StackPanel>
             <Border Style="{StaticResource Card}" Margin="0,0,0,18">
@@ -454,7 +663,7 @@
             <Border Style="{StaticResource Card}" Padding="28">
               <StackPanel>
                 <TextBlock Text="Roger" FontSize="36" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" />
-                <TextBlock x:Name="VersionLabel" Text="v0.2.0 · Windows x64 · MIT License" Foreground="{DynamicResource Muted}" Margin="0,8,0,26" />
+                <TextBlock x:Name="VersionLabel" Text="v0.3.0 · Windows x64 · MIT License" Foreground="{DynamicResource Muted}" Margin="0,8,0,26" />
                 <TextBlock Text="GitHub 发布仓库" FontSize="16" FontWeight="SemiBold" />
                 <TextBlock Text="输入 owner/repository，连接该仓库的正式 GitHub Releases。" Style="{StaticResource MutedText}" Margin="0,8,0,12" />
                 <TextBox x:Name="RepositoryInput" AutomationProperties.Name="GitHub 发布仓库" />
@@ -500,6 +709,192 @@
               </StackPanel>
             </Border>
             <TextBlock Text="检查不会修复文件系统、卸载磁盘或安排重启。活动卷正在写入时，部分结果需要在空闲时复查。" Style="{StaticResource MutedText}" Margin="0,15,0,0" />
+          </StackPanel>
+        </ScrollViewer>
+        <ScrollViewer x:Name="StorageHardwarePage" Visibility="Collapsed" Padding="0,0,12,8">
+          <StackPanel>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Margin="0,0,14,0">
+                    <TextBlock x:Name="StorageModel" Text="正在识别物理硬盘…" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock x:Name="StorageIdentity" Text="按物理设备编号关联卷与传感器。" Style="{StaticResource MutedText}" Margin="0,8,0,0" />
+                  </StackPanel>
+                  <ComboBox x:Name="StorageSelector" Grid.Column="1" Width="280" DisplayMemberPath="Label" SelectedValuePath="Id" SelectionChanged="StorageSelector_Changed" AutomationProperties.Name="查看的物理硬盘" />
+                </Grid>
+                <UniformGrid Columns="4" Margin="0,24,0,0">
+                  <StackPanel>
+                    <TextBlock Text="活动率" Style="{StaticResource MutedText}" />
+                    <TextBlock x:Name="StorageActive" Text="—" Foreground="{DynamicResource Accent}" FontSize="30" Margin="0,8,0,10" />
+                    <ProgressBar x:Name="StorageActiveBar" Margin="0,0,22,0" />
+                  </StackPanel>
+                  <StackPanel>
+                    <TextBlock Text="读取" Style="{StaticResource MutedText}" />
+                    <TextBlock x:Name="StorageRead" Text="—" Foreground="{DynamicResource MemoryAccent}" FontSize="26" Margin="0,10,0,0" />
+                  </StackPanel>
+                  <StackPanel>
+                    <TextBlock Text="写入" Style="{StaticResource MutedText}" />
+                    <TextBlock x:Name="StorageWrite" Text="—" Foreground="{DynamicResource GpuAccent}" FontSize="26" Margin="0,10,0,0" />
+                  </StackPanel>
+                  <StackPanel>
+                    <TextBlock Text="温度" Style="{StaticResource MutedText}" />
+                    <TextBlock x:Name="StorageTemperature" Text="—" Foreground="{DynamicResource NetworkAccent}" FontSize="30" Margin="0,8,0,0" />
+                  </StackPanel>
+                </UniformGrid>
+              </StackPanel>
+            </Border>
+            <Grid Margin="0,18,0,18">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.6*" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Border Style="{StaticResource Card}">
+                <StackPanel>
+                  <TextBlock Text="实时读写趋势" Style="{StaticResource SectionTitle}" />
+                  <views:DiskRateChart x:Name="StorageRateChart" Height="180" Margin="0,20,0,12" />
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="● 读取" Foreground="{DynamicResource MemoryAccent}" Margin="0,0,20,0" FontSize="11" />
+                    <TextBlock Text="● 写入" Foreground="{DynamicResource GpuAccent}" FontSize="11" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+              <Border Grid.Column="2" Style="{StaticResource Card}">
+                <StackPanel>
+                  <TextBlock Text="设备状态" Style="{StaticResource SectionTitle}" />
+                  <TextBlock Text="Windows 存储状态" Style="{StaticResource MutedText}" Margin="0,16,0,5" />
+                  <TextBlock x:Name="StorageHealth" Text="等待采样" FontWeight="SemiBold" />
+                  <TextBlock x:Name="StorageReliability" Text="可靠性数据等待查询" Foreground="{DynamicResource Muted}" Margin="0,13,0,0" />
+                  <TextBlock x:Name="StorageResponse" Foreground="{DynamicResource Muted}" Margin="0,13,0,0" />
+                  <TextBlock x:Name="StorageSource" Foreground="{DynamicResource Faint}" FontSize="10" Margin="0,13,0,0" />
+                </StackPanel>
+              </Border>
+            </Grid>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <TextBlock Text="所有物理硬盘" Style="{StaticResource SectionTitle}" />
+                <DataGrid x:Name="PhysicalDisksGrid" Height="205" Margin="0,14,0,0">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="磁盘" Binding="{Binding NumberText}" Width="65" />
+                    <DataGridTextColumn Header="型号 / 厂商" Binding="{Binding Model}" Width="2*" />
+                    <DataGridTextColumn Header="总线 / 介质" Binding="{Binding InterfaceText}" Width="110" />
+                    <DataGridTextColumn Header="容量" Binding="{Binding SizeText}" Width="100" />
+                    <DataGridTextColumn Header="活动率" Binding="{Binding ActiveText}" Width="80" />
+                    <DataGridTextColumn Header="读取 / 写入" Binding="{Binding RateText}" Width="170" />
+                    <DataGridTextColumn Header="卷" Binding="{Binding Volumes}" Width="90" />
+                  </DataGrid.Columns>
+                </DataGrid>
+              </StackPanel>
+            </Border>
+            <TextBlock x:Name="StorageStatus" Text="读取物理设备、性能计数器与 Windows 存储可靠性信息。" Style="{StaticResource MutedText}" Margin="0,14,0,0" />
+            <TextBlock Text="活动率是磁盘忙碌时间，读写速率是实际传输量；不执行写入测速。健康、温度与寿命信息以设备公开的数据为准，Windows 状态正常不代表完整 SMART 检测或硬件无故障。" Style="{StaticResource MutedText}" Margin="0,10,0,0" />
+          </StackPanel>
+        </ScrollViewer>
+        <ScrollViewer x:Name="ToolboxPage" Visibility="Collapsed" Padding="0,0,12,8">
+          <StackPanel>
+            <Border Background="{DynamicResource AccentSoft}" CornerRadius="10" Padding="16" Margin="0,0,0,18">
+              <TextBlock Text="先查看当前状态，再选择操作。电源与动画修改会保存到本地，可跨重启查看和恢复；系统设置入口由 Windows 显示和管理。" Foreground="{DynamicResource TextPrimary}" FontSize="12" />
+            </Border>
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Border Style="{StaticResource Card}">
+                <StackPanel>
+                  <TextBlock Text="电源计划" Style="{StaticResource SectionTitle}" />
+                  <TextBlock x:Name="PowerPlanStatus" Text="打开页面后读取当前电源计划。" Style="{StaticResource MutedText}" Margin="0,10,0,14" />
+                  <ComboBox x:Name="PowerPlanPicker" DisplayMemberPath="Name" SelectedValuePath="Id" IsEnabled="False" AutomationProperties.Name="电源计划" />
+                  <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                    <Button x:Name="ApplyPowerPlanButton" Content="应用计划" Click="ApplyPowerPlan_Click" Style="{StaticResource Primary}" IsEnabled="False" />
+                    <Button x:Name="UndoPowerPlanButton" Content="恢复上次" Click="UndoPowerPlan_Click" Margin="9,0,0,0" IsEnabled="False" />
+                  </StackPanel>
+                  <TextBlock Text="只列出此电脑已有的计划。偏重性能的计划可能增加功耗与发热。" Style="{StaticResource MutedText}" Margin="0,13,0,0" />
+                </StackPanel>
+              </Border>
+              <Border Grid.Column="2" Style="{StaticResource Card}">
+                <StackPanel>
+                  <TextBlock Text="界面动画" Style="{StaticResource SectionTitle}" />
+                  <TextBlock x:Name="AnimationsStatus" Text="正在读取 Windows 客户区域动画状态。" Style="{StaticResource MutedText}" Margin="0,10,0,10" />
+                  <CheckBox x:Name="ToolAnimationsEnabled" Content="启用 Windows 客户区域动画" IsEnabled="False" />
+                  <StackPanel Orientation="Horizontal" Margin="0,13,0,0">
+                    <Button x:Name="ApplyAnimationsButton" Content="应用动画设置" Click="ApplyAnimations_Click" Style="{StaticResource Primary}" IsEnabled="False" />
+                    <Button x:Name="UndoAnimationsButton" Content="恢复上次" Click="UndoAnimations_Click" IsEnabled="False" Margin="9,0,0,0" />
+                  </StackPanel>
+                  <TextBlock Text="关闭此类动画可减少过渡效果；这是 Windows 公开的单项设置，不会关闭所有程序的动画。" Style="{StaticResource MutedText}" Margin="0,13,0,0" />
+                </StackPanel>
+              </Border>
+            </Grid>
+            <Border Style="{StaticResource Card}" Margin="0,18,0,18">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Margin="0,0,14,0">
+                    <TextBlock Text="DNS 解析缓存" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Text="清除本机已有的 DNS 缓存，让后续解析重新查询；不会修改 DNS 服务器或网络配置。" Style="{StaticResource MutedText}" Margin="0,8,0,0" />
+                  </StackPanel>
+                  <Button x:Name="FlushDnsButton" Grid.Column="1" Content="刷新 DNS 缓存" Click="FlushDns_Click" VerticalAlignment="Center" />
+                  <Button x:Name="CancelDnsButton" Grid.Column="2" Content="取消" Click="CancelDns_Click" IsEnabled="False" VerticalAlignment="Center" Margin="9,0,0,0" />
+                </Grid>
+                <TextBox x:Name="DnsReport" Text="操作结果将显示在这里。" IsReadOnly="True" VerticalContentAlignment="Top" TextWrapping="Wrap" Height="105" VerticalScrollBarVisibility="Auto" FontSize="12" Margin="0,16,0,0" />
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,18">
+              <StackPanel>
+                <TextBlock Text="优化记录与恢复" Style="{StaticResource SectionTitle}"/>
+                <TextBlock Text="保存修改前后的设置，重启后仍可恢复。选择一条记录；恢复前会核对当前值，已被其他操作更改时保留现状并提示冲突。" Style="{StaticResource MutedText}" Margin="0,8,0,14"/>
+                <DataGrid x:Name="OptimizationHistoryGrid" Height="265">
+                  <DataGrid.RowStyle><Style TargetType="DataGridRow"><Setter Property="ToolTip" Value="{Binding Message}"/></Style></DataGrid.RowStyle>
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="时间" Binding="{Binding TimestampText}" Width="140"/>
+                    <DataGridTextColumn Header="操作" Binding="{Binding Title}" Width="*" MinWidth="120"/>
+                    <DataGridTextColumn Header="原值" Binding="{Binding BeforeText}" Width="120"/>
+                    <DataGridTextColumn Header="目标值" Binding="{Binding AfterText}" Width="120"/>
+                    <DataGridTextColumn Header="状态" Binding="{Binding StatusText}" Width="105"/>
+                  </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="{Binding SelectedItem.Message, ElementName=OptimizationHistoryGrid}" Style="{StaticResource MutedText}" Margin="0,12,0,0"/>
+                <WrapPanel Margin="0,15,0,0"><Button Content="恢复选中记录" Click="RestoreOptimizationRecord_Click" Style="{StaticResource Primary}" Margin="0,0,12,0"/><Button Content="刷新操作记录" Click="RefreshOptimizationHistory_Click"/></WrapPanel>
+                <TextBlock x:Name="OptimizationJournalStatus" Style="{StaticResource MutedText}" Margin="0,14,0,0"/>
+              </StackPanel>
+            </Border>
+            <Grid Margin="0,0,0,12">
+              <TextBlock Text="Windows 维护与设置" Style="{StaticResource SectionTitle}" />
+              <Button Content="刷新当前状态" Click="RefreshToolbox_Click" HorizontalAlignment="Right" Padding="12,7" />
+            </Grid>
+            <ItemsControl x:Name="OptimizationTools">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <UniformGrid Columns="2" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,10,12">
+                    <Grid>
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                      </Grid.RowDefinitions>
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" />
+                      <TextBlock Grid.Row="1" Text="{Binding Description}" Style="{StaticResource MutedText}" Margin="0,9,0,14" />
+                      <Button Grid.Row="2" Content="{Binding ActionLabel}" Tag="{Binding Id}" Click="OpenOptimizationTool_Click" HorizontalAlignment="Left" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock x:Name="ToolboxStatus" Style="{StaticResource MutedText}" Margin="0,2,0,0" />
           </StackPanel>
         </ScrollViewer>
       </Grid>

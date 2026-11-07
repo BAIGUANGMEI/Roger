@@ -42,6 +42,12 @@ No Cloudflare speed-test software is bundled. The optional user-initiated networ
 
 Navigation and window caption icons use unmodified SVG originals from [Lucide](https://github.com/lucide-icons/lucide/tree/53fab88ff9d1b48f4704b5b5b560d6b4d560bf4c/icons), pinned to commit `53fab88ff9d1b48f4704b5b5b560d6b4d560bf4c`, converted to WPF geometries. Original SVGs are retained in `src/Roger/Assets/Icons`; the full ISC and inherited Feather MIT terms are included in [third_party/Lucide/LICENSE](third_party/Lucide/LICENSE). Roger's R monogram is original application artwork.
 
-## Optional PawnIO prerequisite
+## Official PawnIO prerequisite
 
-PawnIO is installed only through an explicit user action and is not bundled in Roger's portable package. The installer is downloaded from the [official signed 2.2.0 release](https://github.com/namazso/PawnIO.Setup/releases/tag/2.2.0), verified against a pinned SHA-256 and Windows Authenticode signature, and executed using its normal signed edition. See the [PawnIO project](https://github.com/namazso/PawnIO) and its original licensing terms. Roger does not modify that software.
+Roger's Windows installer bundles the unmodified [official signed PawnIO 2.2.0 installer](https://github.com/namazso/PawnIO.Setup/releases/tag/2.2.0) and installs it automatically only when a compatible installed version is missing. Its original binary-distribution notice permits redistributing that installer unmodified; the notice and exact source/hash information are retained in [third_party/PawnIO](third_party/PawnIO). Packaging verifies SHA-256 and Windows Authenticode; setup checks the bundled installer hash again before running the normal signed edition. Roger does not distribute a patched or separately extracted driver and does not use unrestricted mode. Uninstalling Roger leaves the shared PawnIO installation intact.
+
+The portable ZIP does not install system drivers merely by being extracted; Roger's hardware-access page can download the same verified official prerequisite when requested. The open-source driver project has distinct GPL source terms and an interface exception; those are not a replacement for the actual official signed installer's included distribution notice.
+
+## Inno Setup installer runtime and language messages
+
+The Windows installer is generated using [Inno Setup 6.7.4](https://github.com/jrsoftware/issrc/releases/tag/is-6_7_4) and its upstream Simplified Chinese language messages. The original license and source attribution are retained in [third_party/InnoSetup](third_party/InnoSetup). The compiler is only a build tool; the generated Setup executable contains the installer runtime under its original license. Roger does not relicense those components.

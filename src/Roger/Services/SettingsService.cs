@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Win32;
 using Roger.Models;
 
 namespace Roger.Services;
@@ -10,7 +9,6 @@ namespace Roger.Services;
 /// <summary>Per-user preferences. Writes use an adjacent temporary file and atomic replacement.</summary>
 public sealed class SettingsService
 {
-    private const string StartupValueName = "Roger";
     private readonly object _gate = new();
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -21,6 +19,7 @@ public sealed class SettingsService
 
     public string StoragePath { get; }
     public string? LastLoadWarning { get; private set; }
+    internal bool IsLegacyStartupRegistered => StartupService.IsLegacyStartupRegistered;
 
     public SettingsService(string? storagePath = null)
     {
@@ -80,27 +79,11 @@ public sealed class SettingsService
         }
     }
 
-    public void SetLaunchAtLogin(bool enabled)
-    {
-        using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", writable: true)
-            ?? throw new IOException("无法访问当前用户的启动项。");
-        if (!enabled)
-        {
-            key.DeleteValue(StartupValueName, throwOnMissingValue: false);
-            return;
-        }
-
-        var executable = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(executable)
-            || !string.Equals(Path.GetExtension(executable), ".exe", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(Path.GetFileNameWithoutExtension(executable), "dotnet", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("请从已发布的 Roger.exe 启用开机启动。");
-
-        key.SetValue(StartupValueName, $"\"{executable}\" --tray", RegistryValueKind.String);
-    }
+    public void SetLaunchAtLogin(bool enabled) => StartupService.SetEnabled(enabled);
 
     private static void Validate(AppSettings settings)
     {
+        if (settings.SelectedGpuId is { Length: > 512 }) throw new ArgumentException("显卡标识过长。");
         if (!Enum.IsDefined(settings.Theme)) throw new ArgumentException("外观主题无效。");
         if (!Enum.IsDefined(settings.DockPosition))
             throw new ArgumentException("监控条位置无效。");

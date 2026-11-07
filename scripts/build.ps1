@@ -7,7 +7,7 @@ param(
         [Version]::TryParse($_, [ref]$rogerParsedVersion) -and
             $rogerParsedVersion.Major -lt 65535 -and $rogerParsedVersion.Minor -lt 65535 -and $rogerParsedVersion.Build -lt 65535
     })]
-    [string]$Version = '0.2.1',
+    [string]$Version = '0.3.0',
     [switch]$SkipTests
 )
 
@@ -20,7 +20,7 @@ Push-Location $rogerRoot
 try {
     $rogerBuildProject = if ($SkipTests) { 'src/Roger/Roger.csproj' } else { 'tests/Roger.Smoke/Roger.Smoke.csproj' }
     # The smoke project references the application: one build gives both assemblies the same release version.
-    & $rogerDotnet build $rogerBuildProject --configuration $Configuration "-p:Version=$Version"
+    & $rogerDotnet build $rogerBuildProject --configuration $Configuration "-p:Version=$Version" '-p:UseSharedCompilation=false'
     if ($LASTEXITCODE -ne 0) { throw 'Roger build failed.' }
     if (-not $SkipTests) {
         & $rogerDotnet run --project 'tests/Roger.Smoke/Roger.Smoke.csproj' --configuration $Configuration --no-build

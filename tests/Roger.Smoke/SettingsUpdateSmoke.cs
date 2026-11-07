@@ -41,6 +41,7 @@ public static class SettingsUpdateSmoke
         var original = new AppSettings
         {
             Theme = AppTheme.Light,
+            SelectedGpuId = "/gpu-test/1",
             ShowCpu = false,
             ShowGpu = false,
             ShowTemperature = false,
@@ -60,6 +61,7 @@ public static class SettingsUpdateSmoke
         Check(loaded.DockPosition == DockPosition.Free && loaded.DockLeft == -125.5 && loaded.DockTop == 72.25, "dock position roundtrip");
         Check(loaded.DockOpacity == 0.65 && loaded.RefreshIntervalSeconds == 3, "sampling and opacity roundtrip");
         Check(loaded.Theme == AppTheme.Light, "light theme persists across launches");
+        Check(loaded.SelectedGpuId == "/gpu-test/1", "selected GPU identifier persists across launches");
         Check(!loaded.ShowCpu && !loaded.ShowGpu && loaded.ShowMemory && !loaded.ShowTemperature && loaded.CompactDock && !loaded.MinimizeToTray, "visibility flags roundtrip");
         Check(loaded.UpdateRepository == "example/Roger" && loaded.CheckUpdatesOnStartup, "repository URL normalized before persistence");
         Check(!File.Exists(path + ".bak"), "first save has no prior version to back up");
@@ -80,6 +82,7 @@ public static class SettingsUpdateSmoke
         AppSettings[] invalid =
         {
             new() { Theme = (AppTheme)999 },
+            new() { SelectedGpuId = new string('x', 513) },
             new() { RefreshIntervalSeconds = 0 }, new() { RefreshIntervalSeconds = 11 },
             new() { DockOpacity = double.NaN }, new() { DockOpacity = double.PositiveInfinity },
             new() { DockOpacity = 0.39 }, new() { DockOpacity = 1.01 },

@@ -25,6 +25,8 @@ public sealed class HistoryChart : FrameworkElement
         InvalidateVisual();
     }
 
+    public void Reset() { _samples.Clear(); InvalidateVisual(); }
+
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);

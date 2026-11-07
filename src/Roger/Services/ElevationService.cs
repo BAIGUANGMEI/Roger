@@ -6,7 +6,7 @@ using System.Security.Principal;
 
 namespace Roger.Services;
 
-/// <summary>Explicit, user-initiated UAC elevation. Normal startup remains available.</summary>
+/// <summary>Administrator restart support. Roger.exe requests elevation through its application manifest.</summary>
 public static class ElevationService
 {
     public static bool IsAdministrator

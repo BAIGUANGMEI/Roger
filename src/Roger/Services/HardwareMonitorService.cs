@@ -7,8 +7,8 @@ using System.Linq;
 using System.Management;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using LibreHardwareMonitor.Hardware;
+using LibreHardwareMonitor.Hardware.Gpu;
 using Roger.Models;
 
 namespace Roger.Services;
@@ -37,6 +37,9 @@ public sealed class HardwareMonitorService : IDisposable
     private IReadOnlyList<DriveReading> _drives = Array.Empty<DriveReading>();
     private long _lastDriveRead;
     private HardwareAccessStatus? _hardwareAccess;
+    private readonly List<InventoryDevice> _cpuInventory = new();
+    private readonly List<InventoryDevice> _gpuInventory = new();
+    private IReadOnlyList<MemoryModuleInfo> _memoryModules = Array.Empty<MemoryModuleInfo>();
 
     public void Initialize()
     {
@@ -73,7 +76,7 @@ public sealed class HardwareMonitorService : IDisposable
         }
     }
 
-    public MonitorSnapshot Sample()
+    public MonitorSnapshot Sample(string? selectedGpuId = null)
     {
         lock (_gate)
         {
@@ -91,7 +94,7 @@ public sealed class HardwareMonitorService : IDisposable
                 try
                 {
                     foreach (IHardware hardware in _computer.Hardware)
-                        ReadHardware(hardware, hardware.HardwareType, hardware.Name, sensors, hardwareSensors, warnings);
+                        ReadHardware(hardware, hardware.HardwareType, hardware.Identifier.ToString(), hardware.Name, GpuDeviceId(hardware), sensors, hardwareSensors, warnings);
                 }
                 catch (Exception ex) when (IsRecoverable(ex))
                 {
@@ -100,28 +103,20 @@ public sealed class HardwareMonitorService : IDisposable
                 }
             }
 
-            // GetSystemTimes supplies one aggregate across logical processors. Do not substitute
-            // a single core's utilization when the package total is unavailable.
             double? nativeCpuLoad = ReadNativeCpuLoad();
-            var cpuSensors = hardwareSensors.Where(x => x.Type == HardwareType.Cpu).SelectMany(x => x.Readings).ToArray();
-            double? cpuLoad = Find(cpuSensors, "Load", "CPU Total", "Total") ?? nativeCpuLoad;
-            double? cpuTemperature = Find(cpuSensors, "Temperature", "CPU Package", "Core (Tctl/Tdie)", "Core (Tdie)", "Core (Tctl)");
-            cpuTemperature ??= MaxOrNull(cpuSensors.Where(x => x.Kind == "Temperature").Select(x => x.Value));
-
-            // Keep one GPU's load, temperature, and VRAM together instead of mixing devices.
-            DeviceSensors? gpu = hardwareSensors
-                .Where(x => IsGpu(x.Type))
-                .OrderBy(GpuPriority)
-                .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault();
-            SensorReading[] gpuSensors = gpu?.Readings.ToArray() ?? Array.Empty<SensorReading>();
-            double? gpuLoad = Find(gpuSensors, "Load", "GPU Core", "D3D 3D", "GPU D3D 3D");
-            gpuLoad ??= MaxOrNull(gpuSensors.Where(x => x.Kind == "Load" && x.Name.Contains("3D", StringComparison.OrdinalIgnoreCase)).Select(x => x.Value));
-            double? gpuTemperature = Find(gpuSensors, "Temperature", "GPU Core", "GPU");
-            double? gpuMemoryUsed = FindMemoryMb(gpuSensors, "GPU Memory Used", "D3D Dedicated Memory Used");
-            double? gpuMemoryTotal = FindMemoryMb(gpuSensors, "GPU Memory Total", "D3D Dedicated Memory Total");
-            if (gpuMemoryTotal is <= 0)
-                gpuMemoryTotal = null;
+            var cpuReadings = BuildCpuReadings(hardwareSensors);
+            var gpuReadings = BuildGpuReadings(hardwareSensors);
+            GpuDeviceReading? gpu = HardwareSensorMapper.SelectGpu(gpuReadings, selectedGpuId);
+            // Native total is the only correct fallback across multiple CPU packages.
+            double? cpuLoad = cpuReadings.Count == 1 ? cpuReadings[0].Load ?? nativeCpuLoad : nativeCpuLoad;
+            double? cpuTemperature = cpuReadings.Where(x => x.Temperature.HasValue)
+                .Select(x => x.Temperature).DefaultIfEmpty(null).Max();
+            double? gpuLoad = gpu?.Load;
+            double? gpuTemperature = gpu?.Temperature;
+            double? gpuMemoryUsed = gpu?.MemoryUsedMb;
+            double? gpuMemoryTotal = gpu?.MemoryTotalMb;
+            if (!string.IsNullOrWhiteSpace(selectedGpuId) && gpu?.Id != selectedGpuId)
+                warnings.Add("选择的 GPU 当前不可用，已切换到自动选择");
 
             if (cpuTemperature is null)
                 warnings.Add(HardwareAccessService.CpuTemperatureUnavailableMessage(_hardwareAccess ?? HardwareAccessService.GetStatus()));
@@ -138,7 +133,11 @@ public sealed class HardwareMonitorService : IDisposable
                 DateTimeOffset.Now, ClampPercent(cpuLoad), cpuTemperature,
                 ClampPercent(gpuLoad), gpuTemperature, gpuMemoryUsed, gpuMemoryTotal,
                 memoryUsed, memoryTotal, download, upload, network, _drives,
-                sensors.AsReadOnly(), warnings.Count == 0 ? null : string.Join("；", warnings.Distinct()));
+                sensors.AsReadOnly(), warnings.Count == 0 ? null : string.Join("；", warnings.Distinct()))
+            {
+                CpuDevices = cpuReadings, GpuDevices = gpuReadings, MemoryModules = _memoryModules,
+                SelectedGpuId = gpu?.Id
+            };
         }
     }
 
@@ -152,14 +151,35 @@ public sealed class HardwareMonitorService : IDisposable
                 return _inventory;
 
             var entries = new List<HardwareInfo>();
-            QueryInventory(entries, "SELECT Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed FROM Win32_Processor", "CPU", item =>
-                new HardwareInfo("CPU", Text(item, "Name"), $"{Text(item, "NumberOfCores")} 核心 / {Text(item, "NumberOfLogicalProcessors")} 线程 · 最高 {Text(item, "MaxClockSpeed")} MHz"));
-            QueryInventory(entries, "SELECT Name, DriverVersion, VideoProcessor FROM Win32_VideoController", "GPU", item =>
-                // Win32_VideoController.AdapterRAM is a 32-bit property and overflows on >4 GB cards.
-                // VRAM capacity is intentionally sourced from live hardware sensors instead.
-                new HardwareInfo("GPU", Text(item, "Name"), $"{Text(item, "VideoProcessor")} · 驱动 {Text(item, "DriverVersion")}"));
-            QueryInventory(entries, "SELECT Manufacturer, PartNumber, Capacity, Speed, DeviceLocator FROM Win32_PhysicalMemory", "内存", item =>
-                new HardwareInfo("内存", $"{Text(item, "Manufacturer")} {Text(item, "PartNumber")}".Trim(), $"{Text(item, "DeviceLocator")} · {GiB(item, "Capacity")} GiB · {Text(item, "Speed")} MT/s"));
+            QueryInventory(entries, "SELECT DeviceID, Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed FROM Win32_Processor", "CPU", item =>
+            {
+                string name = Text(item, "Name");
+                string vendor = HardwareSensorMapper.Vendor(Text(item, "Manufacturer"));
+                _cpuInventory.Add(new InventoryDevice(Text(item, "DeviceID"), name, vendor, null));
+                return new HardwareInfo("CPU", name, $"{vendor} · {Text(item, "NumberOfCores")} 核心 / {Text(item, "NumberOfLogicalProcessors")} 线程 · 系统报告 {Text(item, "MaxClockSpeed")} MHz");
+            });
+            QueryInventory(entries, "SELECT DeviceID, PNPDeviceID, Name, AdapterCompatibility, DriverVersion, VideoProcessor FROM Win32_VideoController", "GPU", item =>
+            {
+                string name = Text(item, "Name");
+                string vendor = HardwareSensorMapper.Vendor(Text(item, "AdapterCompatibility"));
+                _gpuInventory.Add(new InventoryDevice(Text(item, "DeviceID"), name, vendor, OptionalText(item, "PNPDeviceID")));
+                // AdapterRAM is 32-bit and overflows on large cards. Never use it as VRAM capacity.
+                return new HardwareInfo("GPU", name, $"{vendor} · {Text(item, "VideoProcessor")} · 驱动 {Text(item, "DriverVersion")}");
+            });
+            var modules = new List<MemoryModuleInfo>();
+            QueryInventory(entries, "SELECT Tag, Manufacturer, PartNumber, Capacity, ConfiguredClockSpeed, Speed, DeviceLocator FROM Win32_PhysicalMemory", "内存", item =>
+            {
+                var module = new MemoryModuleInfo(OptionalText(item, "Tag") ?? "memory/" + modules.Count,
+                    HardwareSensorMapper.ModuleManufacturer(OptionalText(item, "Manufacturer")), OptionalText(item, "PartNumber") ?? "型号未报告",
+                    Number(item, "Capacity") ?? 0, PositiveNumber(item, "ConfiguredClockSpeed"), PositiveNumber(item, "Speed"),
+                    OptionalText(item, "DeviceLocator") ?? "插槽未报告", "Windows WMI / SMBIOS（固件报告，非实时频率）");
+                modules.Add(module);
+                string configured = module.ConfiguredSpeedMtPerSec is uint configuredSpeed ? configuredSpeed + " MT/s" : "未报告";
+                string rated = module.RatedSpeedMtPerSec is uint reportedSpeed ? reportedSpeed + " MT/s" : "未报告";
+                string capacity = module.CapacityBytes > 0 ? $"{module.CapacityGb:0.##} GiB" : "容量未报告";
+                return new HardwareInfo("内存", module.Name, $"{module.Slot} · {capacity} · 当前配置 {configured} · 报告能力 {rated}");
+            });
+            _memoryModules = modules.AsReadOnly();
             QueryInventory(entries, "SELECT Manufacturer, Product, Version FROM Win32_BaseBoard", "主板", item =>
                 new HardwareInfo("主板", $"{Text(item, "Manufacturer")} {Text(item, "Product")}".Trim(), $"版本 {Text(item, "Version")}"));
             QueryInventory(entries, "SELECT Manufacturer, SMBIOSBIOSVersion, ReleaseDate FROM Win32_BIOS", "BIOS", item =>
@@ -189,7 +209,9 @@ public sealed class HardwareMonitorService : IDisposable
                 foreach (IHardware hardware in _computer.Hardware)
                 {
                     string category = Category(hardware.HardwareType);
-                    if (!entries.Any(x => x.Category == category && x.Name.Equals(hardware.Name, StringComparison.OrdinalIgnoreCase)))
+                    if ((hardware.HardwareType == HardwareType.Cpu && _cpuInventory.Count > 0)
+                        || (hardware.HardwareType == HardwareType.Memory && _memoryModules.Count > 0)) continue;
+                    if (!entries.Any(x => x.Category == category && HardwareSensorMapper.NormalizeModel(x.Name) == HardwareSensorMapper.NormalizeModel(hardware.Name)))
                         entries.Add(new HardwareInfo(category, hardware.Name, "传感器来源：LibreHardwareMonitor"));
                 }
             }
@@ -199,7 +221,7 @@ public sealed class HardwareMonitorService : IDisposable
         }
     }
 
-    private static void ReadHardware(IHardware hardware, HardwareType rootType, string rootName,
+    private static void ReadHardware(IHardware hardware, HardwareType rootType, string rootId, string rootName, string? pnpDeviceId,
         List<SensorReading> allReadings, List<DeviceSensors> devices, List<string> warnings)
     {
         var readings = new List<SensorReading>();
@@ -218,7 +240,10 @@ public sealed class HardwareMonitorService : IDisposable
                 // Exclude that value from both the summary and the inspectable sensor list.
                 if (kind == "Temperature" && raw == 0 && (rootType == HardwareType.Cpu || IsGpu(rootType)))
                     continue;
-                var reading = new SensorReading(hardware.Name, sensor.Name, kind, raw, Unit(kind));
+                var reading = new SensorReading(hardware.Name, sensor.Name, kind, raw, Unit(kind))
+                {
+                    HardwareId = hardware.Identifier.ToString()
+                };
                 readings.Add(reading);
                 allReadings.Add(reading);
             }
@@ -229,16 +254,16 @@ public sealed class HardwareMonitorService : IDisposable
             Trace.TraceWarning("Sensor update {0}: {1}", hardware.Name, ex.Message);
         }
 
-        DeviceSensors? device = devices.FirstOrDefault(x => x.Type == rootType && x.Name == rootName);
+        DeviceSensors? device = devices.FirstOrDefault(x => x.Id == rootId);
         if (device is null)
-            devices.Add(new DeviceSensors(rootType, rootName, readings));
+            devices.Add(new DeviceSensors(rootType, rootId, rootName, pnpDeviceId, readings));
         else
             device.Readings.AddRange(readings);
 
         try
         {
             foreach (IHardware child in hardware.SubHardware)
-                ReadHardware(child, rootType, rootName, allReadings, devices, warnings);
+                ReadHardware(child, rootType, rootId, rootName, pnpDeviceId, allReadings, devices, warnings);
         }
         catch (Exception ex) when (IsRecoverable(ex))
         {
@@ -456,40 +481,71 @@ public sealed class HardwareMonitorService : IDisposable
         return !virtualMarkers.Any(x => description.Contains(x, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static int GpuPriority(DeviceSensors gpu)
+    private List<CpuDeviceReading> BuildCpuReadings(List<DeviceSensors> devices)
     {
-        if (gpu.Type == HardwareType.GpuNvidia)
-            return 0;
-        if (gpu.Type == HardwareType.GpuAmd)
+        var cpu = devices.Where(x => x.Type == HardwareType.Cpu).ToArray();
+        var readings = cpu.Select(x => HardwareSensorMapper.Cpu(x.Id, x.Name,
+            HardwareSensorMapper.Vendor(x.Name + " " + x.Id, HardwareType.Cpu), x.Readings)).ToList();
+        var remaining = UnrepresentedInventory(cpu, _cpuInventory, cpuMode: true);
+        foreach (var item in remaining)
+            readings.Add(new CpuDeviceReading("wmi/cpu/" + item.Id, item.Name, item.Vendor, null, null,
+                "Windows WMI（设备配置）", "Windows 已识别该处理器；硬件驱动未提供此设备的传感器"));
+        return readings;
+    }
+
+    private List<GpuDeviceReading> BuildGpuReadings(List<DeviceSensors> devices)
+    {
+        var gpu = devices.Where(x => IsGpu(x.Type)).ToArray();
+        var readings = gpu.Select(x => HardwareSensorMapper.Gpu(x.Id, x.Name,
+            HardwareSensorMapper.Vendor(x.Name, x.Type), HardwareSensorMapper.DiscreteHint(x.Type, x.Id, x.Name), x.Readings)).ToList();
+        var remaining = UnrepresentedInventory(gpu, _gpuInventory, cpuMode: false);
+        foreach (var item in remaining)
+            readings.Add(new GpuDeviceReading("wmi/gpu/" + item.Id, item.Name, item.Vendor, null,
+                null, null, null, null, null, null, "Windows WMI（设备配置）",
+                "Windows 已识别该显卡；硬件驱动未提供此设备的遥测，无法显示负载、温度与显存"));
+        return readings;
+    }
+
+    private static IReadOnlyList<InventoryDevice> UnrepresentedInventory(DeviceSensors[] detected,
+        List<InventoryDevice> inventory, bool cpuMode)
+    {
+        var remaining = inventory.ToList();
+        // Prefer exact PnP identity. Matching a unique model only suppresses the WMI duplicate;
+        // readings are never moved or merged between physical devices, including identical models.
+        var unmatched = new List<DeviceSensors>();
+        foreach (var device in detected)
         {
-            bool integrated = gpu.Name.Contains("Radeon(TM) Graphics", StringComparison.OrdinalIgnoreCase)
-                || gpu.Name.Equals("AMD Radeon Graphics", StringComparison.OrdinalIgnoreCase)
-                || Regex.IsMatch(gpu.Name, @"Radeon\s+(?:\d{3,4}[MS]|Vega\s+\d)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            return integrated ? 2 : 1;
+            string pnp = HardwareSensorMapper.NormalizePnp(device.PnpDeviceId);
+            var matches = pnp.Length > 0 ? remaining.Where(x => HardwareSensorMapper.NormalizePnp(x.PnpDeviceId) == pnp).ToArray() : Array.Empty<InventoryDevice>();
+            if (matches.Length == 1) { remaining.Remove(matches[0]); continue; }
+            if (cpuMode)
+            {
+                string index = device.Id[(device.Id.LastIndexOf('/') + 1)..];
+                var socket = remaining.FirstOrDefault(x => x.Id.Equals("CPU" + index, StringComparison.OrdinalIgnoreCase));
+                if (socket is not null) { remaining.Remove(socket); continue; }
+            }
+            unmatched.Add(device);
         }
-        return gpu.Name.Contains("Arc", StringComparison.OrdinalIgnoreCase) ? 1 : 3;
-    }
-
-    private static double? Find(IEnumerable<SensorReading> readings, string kind, params string[] names)
-    {
-        SensorReading[] candidates = readings.Where(x => x.Kind == kind).ToArray();
-        foreach (string name in names)
+        foreach (var group in unmatched.GroupBy(x => HardwareSensorMapper.NormalizeModel(x.Name)))
         {
-            SensorReading? reading = candidates.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-            if (reading is not null)
-                return reading.Value;
+            foreach (var item in remaining.Where(x => HardwareSensorMapper.NormalizeModel(x.Name) == group.Key)
+                .OrderBy(x => x.Id, StringComparer.Ordinal).Take(group.Count()).ToArray()) remaining.Remove(item);
         }
-        return null;
+        return remaining;
     }
 
-    private static double? FindMemoryMb(IEnumerable<SensorReading> readings, params string[] names)
-        => Find(readings, "SmallData", names) ?? (Find(readings, "Data", names) is double gib ? gib * 1024 : null);
-
-    private static double? MaxOrNull(IEnumerable<double> values)
+    private static string? GpuDeviceId(IHardware hardware)
     {
-        double[] materialized = values.ToArray();
-        return materialized.Length == 0 ? null : materialized.Max();
+        try { return (hardware as GenericGpu)?.DeviceId; }
+        catch (Exception ex) when (IsRecoverable(ex)) { return null; }
     }
+
+    private static string? OptionalText(ManagementBaseObject item, string property)
+        => Convert.ToString(item[property], CultureInfo.InvariantCulture)?.Trim() is { Length: > 0 } value ? value : null;
+    private static long? Number(ManagementBaseObject item, string property)
+        => long.TryParse(OptionalText(item, property), NumberStyles.Integer, CultureInfo.InvariantCulture, out long number) && number >= 0 ? number : null;
+    private static uint? PositiveNumber(ManagementBaseObject item, string property)
+        => uint.TryParse(OptionalText(item, property), NumberStyles.Integer, CultureInfo.InvariantCulture, out uint number) && number > 0 ? number : null;
 
     private static double? ClampPercent(double? value) => value is double actual && double.IsFinite(actual) ? Math.Clamp(actual, 0, 100) : null;
     private static bool IsGpu(HardwareType type) => type is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel;
@@ -570,7 +626,8 @@ public sealed class HardwareMonitorService : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private sealed record DeviceSensors(HardwareType Type, string Name, List<SensorReading> Readings);
+    private sealed record DeviceSensors(HardwareType Type, string Id, string Name, string? PnpDeviceId, List<SensorReading> Readings);
+    private sealed record InventoryDevice(string Id, string Name, string Vendor, string? PnpDeviceId);
     private readonly record struct NetworkBaseline(long Received, long Sent, long Timestamp);
 
     [StructLayout(LayoutKind.Sequential)]

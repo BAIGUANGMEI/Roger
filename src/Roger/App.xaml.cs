@@ -9,6 +9,14 @@ public partial class App : Application
     private Mutex? _mutex;
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Fixed maintenance action used by the uninstaller; never opens a monitoring window.
+        if (Array.IndexOf(e.Args, "--unregister-startup") >= 0)
+        {
+            if (e.Args.Length != 1) { Shutdown(2); return; }
+            try { StartupService.SetEnabled(false); Shutdown(0); }
+            catch { Shutdown(1); }
+            return;
+        }
         try { ElevationService.WaitForPreviousInstance(e.Args); }
         catch (Exception ex) { MessageBox.Show(ex.Message, "Roger"); Shutdown(); return; }
         _mutex = new Mutex(true, "Local\\Roger.Desktop.Instance", out bool first);

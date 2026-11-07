@@ -4,11 +4,19 @@ Windows 硬件监控与磁盘空间分析工具。原生 C# / WPF 界面，支�
 
 [源码仓库](https://github.com/BAIGUANGMEI/Roger) · [下载正式版本](https://github.com/BAIGUANGMEI/Roger/releases/latest)
 
-## 初版功能
+## 功能
+
+当前版本 **v0.3.0**，支持 Windows 安装版和便携版。
 
 - **实时监控**：CPU、GPU 使用率及可用温度，内存占用，网络上传/下载速率，磁盘容量。
-- **界面外观**：统一 R 字母 Logo 和 Lucide 矢量图标，亮暗主题即时切换，紧凑滚动条，固定页面标题；传感器刷新保留列表位置。
+- **界面外观**：统一 R 字母 Logo 和 Lucide 矢量图标，亮暗主题即时切换，紧凑滚动条，固定页面标题；托盘右键菜单同步主题，显示监控条当前状态；传感器刷新保留列表位置。
 - **硬件配置**：处理器、显卡、内存、主板、BIOS、系统、磁盘、网络设备与可读取的传感器信息。
+- **多品牌设备监控**：兼容 Intel / AMD CPU 与 NVIDIA / AMD / Intel GPU 的可用传感器；逐个显示设备，支持选择概览和监控条使用的显卡，区分专用与共享 GPU 内存。内存条显示固件报告的厂商、型号、插槽、容量与速率。
+- **硬盘硬件**：按物理硬盘查看型号、总线、SSD / HDD、盘符映射、活动率、读写速率、队列和响应时间；显示设备公开的温度、磨损及 Windows 存储状态。
+- **异常提醒**：CPU / GPU 持续高温、内存紧张、卷剩余空间不足时记录并通过托盘通知；阈值、持续时间、冷却、静音均可配置，本地保留最近 500 条记录。
+- **进程资源排行**：每 2 秒只读采集进程 CPU、内存工作集和 I/O 速率，可按指标排序、按程序名称或 PID 搜索，显示前 100 项及可读程序路径。
+- **历史监控**：本地保留七天的分钟汇总，可切换一小时 / 一天 / 七天，查看 CPU、GPU、内存、温度、网络和物理盘读写的平均与峰值，支持 CSV 导出。
+- **优化工具箱与恢复**：查看并切换现有电源计划、调整 Windows 客户区域动画；修改前保存原值，跨重启查看结果和恢复，外部设置发生变化时提示冲突。内置 DNS 缓存刷新报告，以及启动应用、存储感知、游戏模式、应用图形首选项、电源与睡眠、优化驱动器、磁盘清理入口。所有更改均由点击触发。
 - **监控条与托盘**：随应用启动显示监控条；可选择 CPU / GPU / 内存 / 网络、温度、精简模式、透明度和刷新间隔。支持任务栏两侧、屏幕角落或自由拖动，双击打开主窗口，右键切换位置。任务栏被激活并遮住监控条时会恢复显示层级，不激活监控条或抢走焦点。可关闭主窗口后保留托盘运行。
 - **磁盘空间扫描**：选择文件夹或分区，统计直接子项和大文件，显示扫描进度，支持取消。
 - **文件系统检查**：管理员模式下直接在 Roger 内运行 Windows CHKDSK 只读检查，显示中文实时报告，支持取消，全程不打开终端。
@@ -17,9 +25,13 @@ Windows 硬件监控与磁盘空间分析工具。原生 C# / WPF 界面，支�
 
 ## 使用
 
-发布包面向 **Windows 10 / 11 x64**。解压完整的 `Roger-win-x64.zip` 后运行 `Roger.exe`，保留旁边的依赖文件。自包含发布包无需另装 .NET。
+发布包面向 **Windows 10 / 11 x64**。推荐运行 `Roger-Setup-0.3.0-x64.exe`：安装器创建快捷方式和卸载入口，并在缺失时自动安装已核验的官方签名 PawnIO 温度驱动；依赖已包含在安装器中，可离线安装。已有兼容驱动时跳过，不自动重启。
 
-开发环境需要 Windows 和 [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)：
+也可以解压完整的 `Roger-win-x64.zip` 后运行 `Roger.exe`，保留旁边的依赖文件；便携版缺少驱动时，在硬件页面安装。两种发布包都自包含 .NET，无需另装运行时。Roger 默认请求管理员权限，确认 Windows UAC 后启动，用于读取 CPU 等底层传感器和执行文件系统只读检查。升级和卸载保留本地配置、提醒、历史与优化记录；卸载移除当前用户的 Roger 登录启动入口，保留共享 PawnIO 驱动。
+
+Roger 程序与安装器当前没有商业代码签名，Windows 可能显示未知发布者；驱动使用官方签名原包。安装方式和构建说明见 [安装器说明](docs/INSTALLER.md)。
+
+开发环境需要 Windows 和 [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)。运行调试程序时请从管理员终端执行：
 
 ```powershell
 dotnet run --project src/Roger/Roger.csproj
@@ -37,11 +49,23 @@ powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 ```
 
-输出位于 `artifacts/Roger-win-x64/`，压缩包为 `artifacts/Roger-win-x64.zip`，同时生成 `SHA256SUMS.txt`。配置保存在 `%LOCALAPPDATA%\Roger\settings.json`，更新采用原子替换，保留上一份 `.bak`。开启“登录时启动”只写入当前用户的 Windows 启动项。
+同时生成便携包、安装器与校验文件（自动准备固定版本的官方 Inno Setup 便携编译器）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/package.ps1 -Version 0.3.0 -BootstrapCompiler
+```
+
+输出位于 `artifacts/Roger-win-x64/`，压缩包为 `artifacts/Roger-win-x64.zip`，完整打包还生成 `artifacts/Roger-Setup-0.3.0-x64.exe` 和包含两者的 `SHA256SUMS.txt`。配置保存在 `%LOCALAPPDATA%\Roger\settings.json`，更新采用原子替换，保留上一份 `.bak`。开启“登录时启动”后，注册仅限当前用户、以最高权限运行的登录计划任务；不保存密码。关闭时移除该任务。已开启的登录启动会在应用启动时核对并更新为当前路径，兼容从便携版迁至安装版。
 
 ## 数据与边界
 
-**温度与硬件支持。** 通过 [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/tree/v0.9.6) 读取传感器。CPU 等底层传感器需要 PawnIO 驱动和管理员模式；硬件页显示具体访问状态，并提供“安装官方温度驱动”和“以管理员身份重启”入口。安装只由明确点击触发，下载固定版本的官方签名驱动，先校验 SHA-256 与 Windows 数字签名，再经 UAC 授权安装；不会关闭防护或修改系统安全策略。当前版本采用 [PawnIO 2.2.0](https://github.com/namazso/PawnIO.Setup/releases/tag/2.2.0)。硬件或固件没有提供有效读数时仍显示“不可用”。多 GPU 机器的总览优先独立显卡，传感器列表保留其他设备信息。更多数据来源见 [硬件说明](docs/HARDWARE.md)。
+**温度与硬件支持。** 通过 [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/tree/v0.9.6) 读取传感器。CPU 等底层传感器需要 PawnIO 驱动和管理员模式；安装版自动检测并安装缺少的驱动，便携版在硬件页提供安装入口。采用固定 [PawnIO 2.2.0 官方签名原包](https://github.com/namazso/PawnIO.Setup/releases/tag/2.2.0)，核验 SHA-256 和 Windows 数字签名；不会关闭防护或修改系统安全策略。硬件或固件没有提供有效读数时仍显示“不可用”。多 GPU 机器可以手动选择概览设备，自动模式优先已识别的独立显卡，再考虑未知类型和集显；各设备数据分别匹配，不按厂商硬编码优先级。具体型号支持仍取决于上游、驱动和权限。更多数据来源见 [硬件说明](docs/HARDWARE.md)。
+
+**硬盘硬件。** 实时性能来自 Windows 物理磁盘计数器，温度与可靠性来自 Windows Storage 或可匹配的 LibreHardwareMonitor 传感器。不同硬盘和控制器公开的字段不同，缺失数据保留“不可用”；Windows 状态正常不等于完整 SMART 检查。详情见 [物理磁盘监控](docs/STORAGE.md)。
+
+**优化工具。** 电源计划只使用系统已有选项；“动画”只更改 Windows 客户区域动画开关。DNS 刷新在软件内显示输出，不弹出终端。其余入口打开对应 Windows 页面，由用户选择后续操作；不会自动清理文件或执行磁盘优化。详情见 [优化工具箱](docs/OPTIMIZATION.md)。
+
+**提醒、进程与历史。** 数据均留在本机；历史文件按分钟汇总，图表平均值与原始采样峰值分别展示，未运行时不补造数据。进程 CPU 按全机逻辑处理器归一，工作集含共享页，进程 I/O 不等同于物理磁盘读写。提醒只在有效采样满足持续时间后产生，系统通知可能受 Windows 免打扰影响。详情见 [监控记录说明](docs/OBSERVABILITY.md)。
 
 **任务栏展示。** 当前监控条是贴靠任务栏的置顶悬浮窗，带独立托盘入口；它不是 Windows 11 任务栏内部的扩展插件。可能覆盖任务栏图标，可拖到空白处、选择屏幕角落或启用精简模式。切换显示器、DPI 和任务栏布局后会重新计算位置。
 
@@ -56,7 +80,7 @@ powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 1. 在 GitHub 创建仓库并推送本项目。
 2. 在版本页填写发布仓库，例如 `your-name/Roger`；默认连接 `BAIGUANGMEI/Roger`。
 3. 为正式版本更新项目版本号，提交代码。标签发布流程会将标签版本传入构建；更新检查从实际程序集读取当前版本。
-4. 推送 `v0.2.0` 这样的版本标签；Release 工作流会编译、运行冒烟检查、打包并附上 SHA256 校验值。
+4. 推送 `v0.3.0` 这样的版本标签；Release 工作流会编译、运行冒烟检查、构建便携包和安装器，附上 SHA256 校验值及对应的版本说明。
 
 版本检查只连接所配置仓库的 GitHub Release API。初版打开官方 Release 下载页，由用户下载和替换程序；尚未实现后台下载、自动安装与回滚。GitHub 的连通性和 API 限额可能影响检查。
 

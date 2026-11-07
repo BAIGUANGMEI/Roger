@@ -1,4 +1,4 @@
-name: Release Windows portable build
+name: Release Windows packages
 
 on:
   push:
@@ -21,19 +21,20 @@ jobs:
         env:
           ROGER_RELEASE_REF: ${{ github.ref }}
         run: |
-          $rogerVersion = '0.2.1'
+          $rogerVersion = '0.3.0'
           if ($env:ROGER_RELEASE_REF.StartsWith('refs/tags/', [StringComparison]::Ordinal)) {
             $rogerTag = $env:ROGER_RELEASE_REF.Substring('refs/tags/'.Length)
             if (-not $rogerTag.StartsWith('v', [StringComparison]::Ordinal)) { throw 'Release tags must start with v.' }
             $rogerVersion = $rogerTag.Substring(1)
           }
-          ./scripts/publish.ps1 -Version $rogerVersion
-      - name: Upload portable package
+          ./scripts/package.ps1 -Version $rogerVersion -BootstrapCompiler
+      - name: Upload release packages
         uses: actions/upload-artifact@v4
         with:
-          name: Roger-win-x64
+          name: Roger-Windows-packages
           path: |
             artifacts/Roger-win-x64.zip
+            artifacts/Roger-Setup-*-x64.exe
             artifacts/SHA256SUMS.txt
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -41,5 +42,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$env:GITHUB_REF_NAME" artifacts/Roger-win-x64.zip artifacts/SHA256SUMS.txt --verify-tag --title "Roger $env:GITHUB_REF_NAME" --generate-notes
+          $rogerVersion = $env:GITHUB_REF_NAME.Substring(1)
+          $rogerNotes = "docs/releases/$env:GITHUB_REF_NAME.md"
+          if (-not (Test-Path -LiteralPath $rogerNotes)) { throw 'Missing versioned release notes.' }
+          gh release create "$env:GITHUB_REF_NAME" artifacts/Roger-win-x64.zip "artifacts/Roger-Setup-$rogerVersion-x64.exe" artifacts/SHA256SUMS.txt --verify-tag --title "Roger $env:GITHUB_REF_NAME" --notes-file $rogerNotes --latest
           if ($LASTEXITCODE -ne 0) { throw 'GitHub Release creation failed.' }

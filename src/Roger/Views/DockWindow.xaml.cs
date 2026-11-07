@@ -20,6 +20,7 @@ public partial class DockWindow : Window
     private bool _positionPending;
     private bool _dragging;
     private bool _closed;
+    private bool _externalMenuOpen;
     private IntPtr _handle;
     private readonly DockTopmostService _topmost;
 
@@ -37,7 +38,7 @@ public partial class DockWindow : Window
         IsVisibleChanged += (_, _) => { if (IsVisible) SchedulePosition(); };
         SizeChanged += (_, _) => SchedulePosition();
         InitializeComponent();
-        _topmost = new DockTopmostService(this, () => _dragging || Shell.ContextMenu?.IsOpen == true);
+        _topmost = new DockTopmostService(this, () => _dragging || _externalMenuOpen || Shell.ContextMenu?.IsOpen == true);
         BuildContextMenu();
         ApplySettings(settings);
     }
@@ -132,6 +133,12 @@ public partial class DockWindow : Window
 
     private void UpdateTopmostMode() => _topmost.SetEnabled(
         _settings.DockPosition is DockPosition.TaskbarLeft or DockPosition.TaskbarRight or DockPosition.Free);
+
+    internal void SetExternalMenuOpen(bool open)
+    {
+        _externalMenuOpen = open;
+        if (!open && !_closed) _topmost.RequestRestore();
+    }
 
     private void EnsureNativeWindow()
     {

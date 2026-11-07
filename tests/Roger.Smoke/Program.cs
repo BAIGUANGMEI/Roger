@@ -11,8 +11,15 @@ internal static class Program
             await SettingsUpdateSmoke.RunAsync();
             await FileSystemCheckSmoke.RunAsync();
             await HardwareAccessSmoke.RunAsync();
+            await OptimizationSmoke.RunAsync();
+            await StorageSmoke.RunAsync();
+            await HardwareVendorSmoke.RunAsync();
+            await AlertSmoke.RunAsync();
+            await ProcessSmoke.RunAsync();
+            await OptimizationJournalSmoke.RunAsync();
+            await HistorySmoke.RunAsync();
             if (Array.IndexOf(args, "--desktop") >= 0) await DockWindowSmoke.RunAsync();
-            if (Array.IndexOf(args, "--hardware") >= 0) await HardwareSmoke.RunAsync();
+            if (Array.IndexOf(args, "--hardware") >= 0) { await HardwareSmoke.RunAsync(); await StorageSmoke.RunLiveAsync(); }
             Console.WriteLine("All Roger smoke checks passed.");
             return 0;
         }

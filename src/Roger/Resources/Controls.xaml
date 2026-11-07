@@ -3,6 +3,7 @@
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
   <Style x:Key="MutedText" TargetType="TextBlock">
+    <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Foreground" Value="{DynamicResource Muted}" />
     <Setter Property="FontSize" Value="12" />
   </Style>
@@ -179,7 +180,7 @@
                 </ControlTemplate>
               </ToggleButton.Template>
             </ToggleButton>
-            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" IsHitTestVisible="False" Margin="12,7,34,7" VerticalAlignment="Center" />
+            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" IsHitTestVisible="False" Margin="12,7,34,7" VerticalAlignment="Center" />
             <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False">
               <Border Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" Padding="5" Margin="0,4,0,0">
                 <ScrollViewer MaxHeight="300">
@@ -297,6 +298,8 @@
   <Style TargetType="DataGridCell">
     <Setter Property="Padding" Value="10,3" />
     <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    <Setter Property="ToolTip" Value="{Binding Content.Text, RelativeSource={RelativeSource Self}}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="DataGridCell">
@@ -306,6 +309,12 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+    <Style.Triggers>
+      <Trigger Property="IsSelected" Value="True">
+        <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+      </Trigger>
+    </Style.Triggers>
   </Style>
   <Style x:Key="ScrollThumbStyle" TargetType="Thumb">
     <Setter Property="MinHeight" Value="24" />

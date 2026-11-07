@@ -12,9 +12,9 @@ public static class HardwareSmoke
         try
         {
             await Task.Run(service.Initialize);
-            MonitorSnapshot first = await Task.Run(service.Sample);
+            MonitorSnapshot first = await Task.Run(() => service.Sample());
             await Task.Delay(350);
-            MonitorSnapshot second = await Task.Run(service.Sample);
+            MonitorSnapshot second = await Task.Run(() => service.Sample());
 
             Check(second.Timestamp >= first.Timestamp, "sample timestamp must advance");
             Check(second.CpuLoad is >= 0 and <= 100, "Windows must report an aggregate CPU load after two samples");
@@ -35,16 +35,17 @@ public static class HardwareSmoke
             foreach (string hiddenInterface in new[] { "WFP", "QoS Packet Scheduler", "Miniport", "Native WiFi Filter" })
                 Check(!second.NetworkName.Contains(hiddenInterface, StringComparison.OrdinalIgnoreCase), "hidden network filter interfaces must not duplicate traffic");
 
-            var nvidia = second.Sensors.Where(x => x.Hardware.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase))
-                .GroupBy(x => x.Hardware).OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
-            if (nvidia is not null)
+            Check(second.CpuDevices.Select(x => x.Id).Distinct().Count() == second.CpuDevices.Count, "CPU identifiers must remain unique");
+            Check(second.GpuDevices.Select(x => x.Id).Distinct().Count() == second.GpuDevices.Count, "same-model GPU identifiers must remain unique");
+            GpuDeviceReading? selected = second.GpuDevices.FirstOrDefault(x => x.Id == second.SelectedGpuId);
+            if (selected is not null)
             {
-                SensorReading? coreLoad = nvidia.FirstOrDefault(x => x.Kind == "Load" && x.Name == "GPU Core");
-                SensorReading? coreTemperature = nvidia.FirstOrDefault(x => x.Kind == "Temperature" && x.Name == "GPU Core");
-                SensorReading? memoryCapacity = nvidia.FirstOrDefault(x => x.Kind == "SmallData" && x.Name == "GPU Memory Total");
-                if (coreLoad is not null) Check(second.GpuLoad == coreLoad.Value, "NVIDIA must be preferred over an integrated GPU");
-                if (coreTemperature is not null) Check(second.GpuTemperature == coreTemperature.Value, "GPU summary temperature must belong to the selected NVIDIA device");
-                if (memoryCapacity is not null) Check(second.GpuMemoryTotalMb == memoryCapacity.Value, "GPU summary VRAM must belong to the selected NVIDIA device");
+                Check(second.GpuLoad == selected.Load && second.GpuTemperature == selected.Temperature,
+                    "GPU summary must belong to the selected device regardless of vendor");
+                Check(second.GpuMemoryUsedMb == selected.MemoryUsedMb && second.GpuMemoryTotalMb == selected.MemoryTotalMb,
+                    "GPU summary memory must belong to the selected device");
+                MonitorSnapshot explicitSelection = await Task.Run(() => service.Sample(selected.Id));
+                Check(explicitSelection.SelectedGpuId == selected.Id, "explicit GPU selection survives sampling");
             }
 
             foreach (DriveReading drive in second.Drives)
@@ -56,11 +57,16 @@ public static class HardwareSmoke
             {
                 Check(double.IsFinite(sensor.Value), "raw sensor must be finite");
                 Check(!string.IsNullOrWhiteSpace(sensor.Hardware) && !string.IsNullOrWhiteSpace(sensor.Name), "raw sensor identity");
+                Check(!string.IsNullOrWhiteSpace(sensor.HardwareId), "raw sensors retain stable hardware identifiers for same-model devices");
             }
 
             var inventory = await Task.Run(service.GetHardwareInfo);
             Check(inventory.Count > 0 && inventory.Any(x => x.Category == "CPU"), "inventory must include CPU info or an explicit unavailable entry");
             Check(inventory.All(x => !string.IsNullOrWhiteSpace(x.Category) && !string.IsNullOrWhiteSpace(x.Name)), "inventory entries have identities");
+            var inventorySample = await Task.Run(() => service.Sample());
+            foreach (MemoryModuleInfo module in inventorySample.MemoryModules)
+                Check(!string.IsNullOrWhiteSpace(module.Id) && !string.IsNullOrWhiteSpace(module.Manufacturer) && module.CapacityBytes >= 0,
+                    "memory modules retain firmware identity and capacity");
             Check(ReferenceEquals(inventory, service.GetHardwareInfo()), "inventory must be cached instead of rerunning WMI each tick");
             if (second.CpuTemperature is null)
                 Check(second.StatusMessage?.Contains("CPU 温度不可用", StringComparison.Ordinal) == true, "unsupported CPU temperature must be explicit");
